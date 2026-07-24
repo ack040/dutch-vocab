@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1d3557">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Dutch Vocab">
+  <title>Dutch Vocab B1–B2</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Home screen -->
+  <main id="screen-home" class="screen active">
+    <header class="hero">
+      <div class="flag"><span></span><span></span><span></span></div>
+      <h1>Dutch Vocab</h1>
+      <p class="subtitle">B1–B2 &middot; 20 questions per round</p>
+    </header>
+
+    <section class="mode-buttons">
+      <button class="btn btn-primary" data-mode="nl-en">
+        <span class="btn-title">Nederlands → English</span>
+        <span class="btn-sub">Recognise Dutch words</span>
+      </button>
+      <button class="btn btn-primary" data-mode="en-nl">
+        <span class="btn-title">English → Nederlands</span>
+        <span class="btn-sub">Recall the Dutch word</span>
+      </button>
+      <button class="btn btn-primary" data-mode="mixed">
+        <span class="btn-title">Mixed round</span>
+        <span class="btn-sub">Both directions, shuffled</span>
+      </button>
+    </section>
+
+    <section class="home-best" id="home-best"></section>
+
+    <button class="btn btn-ghost" id="btn-scores">🏆 Best scores</button>
+    <p class="word-count" id="word-count"></p>
+  </main>
+
+  <!-- Quiz screen -->
+  <main id="screen-quiz" class="screen">
+    <header class="quiz-header">
+      <button class="quit" id="btn-quit" aria-label="Quit round">✕</button>
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <div class="progress-text"><span id="q-number"></span><span id="q-score"></span></div>
+      </div>
+    </header>
+
+    <section class="question-card">
+      <p class="direction-label" id="direction-label"></p>
+      <h2 class="prompt-word" id="prompt-word"></h2>
+    </section>
+
+    <section class="options" id="options"></section>
+
+    <button class="btn btn-primary btn-next hidden" id="btn-next">Next</button>
+  </main>
+
+  <!-- Result screen -->
+  <main id="screen-result" class="screen">
+    <section class="result-card">
+      <p class="result-emoji" id="result-emoji"></p>
+      <h2 id="result-title"></h2>
+      <p class="result-score"><span id="result-score"></span><span class="result-total">/20</span></p>
+      <p class="result-detail" id="result-detail"></p>
+    </section>
+
+    <section class="review" id="review"></section>
+
+    <div class="result-actions">
+      <button class="btn btn-primary" id="btn-again">Play again</button>
+      <button class="btn btn-ghost" id="btn-result-scores">🏆 Best scores</button>
+      <button class="btn btn-ghost" id="btn-result-home">Home</button>
+    </div>
+  </main>
+
+  <!-- Best scores screen -->
+  <main id="screen-scores" class="screen">
+    <header class="scores-header">
+      <button class="quit" id="btn-scores-back" aria-label="Back">←</button>
+      <h2>🏆 Best scores</h2>
+    </header>
+    <section id="scores-table"></section>
+    <button class="btn btn-ghost btn-danger" id="btn-clear-scores">Clear all scores</button>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
+    }
+  </script>
+</body>
+</html>
