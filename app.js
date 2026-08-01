@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 const ROUND_LENGTH = 20;
 const OPTION_COUNT = 4;
 const MAX_SCORES = 10;
@@ -116,7 +116,7 @@ function makeQuestion(entry, dir) {
   // pass can't fill all slots, retry without the class restriction.
   const cls = wordClass(entry);
   const pool = shuffle(VOCAB);
-  const distractors = [];
+  const distractors = []; // { val, other } — val in answer language, other its translation
   for (const sameClassOnly of [true, false]) {
     for (const cand of pool) {
       if (distractors.length >= OPTION_COUNT - 1) break;
@@ -125,10 +125,15 @@ function makeQuestion(entry, dir) {
       const val = cand[answerKey];
       if (val === answer) continue;
       if (overlaps(val, answer)) continue;
-      if (distractors.some((d) => d === val || overlaps(d, val))) continue;
-      distractors.push(val);
+      if (distractors.some((d) => d.val === val || overlaps(d.val, val))) continue;
+      distractors.push({ val, other: cand[promptKey] });
     }
   }
+
+  // translations maps every option to its counterpart word, so the learner
+  // can reveal the meaning of all four choices after answering.
+  const translations = { [answer]: entry[promptKey] };
+  distractors.forEach((d) => { translations[d.val] = d.other; });
 
   return {
     dir,
@@ -136,7 +141,8 @@ function makeQuestion(entry, dir) {
     en: entry.en,
     prompt: entry[promptKey],
     answer,
-    options: shuffle([answer, ...distractors]),
+    options: shuffle([answer, ...distractors.map((d) => d.val)]),
+    translations,
   };
 }
 
@@ -185,43 +191,80 @@ function renderQuestion() {
     const btn = document.createElement("button");
     btn.className = "option";
     btn.textContent = opt;
-    btn.addEventListener("click", () => answer(btn, opt));
+    btn.addEventListener("click", () => lockAnswer(opt, btn));
     box.appendChild(btn);
   });
 
+  // Reset the answer-time controls for the fresh question.
+  $("btn-dunno").classList.remove("gone");
+  $("btn-reveal").classList.add("gone");
+  const panel = $("translations");
+  panel.classList.add("gone");
+  panel.innerHTML = "";
   $("btn-next").classList.add("hidden");
 }
 
-function answer(btn, chosen) {
+// chosen is the picked option string, or null when "I don't know" was tapped.
+// chosenBtn is the option button element, or null for "I don't know".
+function lockAnswer(chosen, chosenBtn) {
   const q = round.questions[round.index];
   const total = round.questions.length;
   const buttons = [...$("options").children];
   buttons.forEach((b) => (b.disabled = true));
 
-  const correct = chosen === q.answer;
+  const correct = chosen !== null && chosen === q.answer;
   if (correct) {
     round.score++;
-    btn.classList.add("correct");
+    chosenBtn.classList.add("correct");
     // In mistakes mode a correct answer retires the word from the bank.
     if (round.mode === "mistakes") masterMistake(q);
     if (navigator.vibrate) navigator.vibrate(15);
   } else {
-    btn.classList.add("wrong");
-    round.mistakes.push({ prompt: q.prompt, answer: q.answer, chosen });
+    if (chosenBtn) chosenBtn.classList.add("wrong");
+    round.mistakes.push({
+      prompt: q.prompt,
+      answer: q.answer,
+      chosen: chosen === null ? "(didn't know)" : chosen,
+    });
     recordMistake(q); // remember it for Practice mistakes
     if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
   }
   buttons.forEach((b) => {
     if (b.textContent === q.answer) b.classList.add("correct");
-    else if (b !== btn) b.classList.add("dimmed");
+    else if (b !== chosenBtn) b.classList.add("dimmed");
   });
 
   $("q-score").textContent = `✓ ${round.score}`;
   $("progress-fill").style.width = `${((round.index + 1) / total) * 100}%`;
 
+  $("btn-dunno").classList.add("gone");
+  $("btn-reveal").classList.remove("gone");
+
   const nextBtn = $("btn-next");
   nextBtn.textContent = round.index + 1 < total ? "Next" : "See result";
   nextBtn.classList.remove("hidden");
+}
+
+// Reveal the meaning of every multiple-choice option so the learner can
+// study all four words, not just the one they were asked about.
+function showTranslations() {
+  const q = round.questions[round.index];
+  const panel = $("translations");
+  panel.innerHTML = "";
+  q.options.forEach((opt) => {
+    const row = document.createElement("div");
+    row.className = "tr-row" + (opt === q.answer ? " tr-correct" : "");
+    const word = document.createElement("span");
+    word.className = "tr-word";
+    word.textContent = opt;
+    const mean = document.createElement("span");
+    mean.className = "tr-mean";
+    mean.textContent = q.translations[opt] || "";
+    row.append(word, mean);
+    panel.appendChild(row);
+  });
+  panel.classList.remove("gone");
+  $("btn-reveal").classList.add("gone");
 }
 
 function nextQuestion() {
@@ -316,7 +359,7 @@ function finishRound() {
       q.textContent = m.prompt;
       const a = document.createElement("div");
       const x = document.createElement("span");
-      x.className = "ri-x";
+      x.className = m.chosen.startsWith("(") ? "ri-note" : "ri-x";
       x.textContent = m.chosen;
       const ok = document.createElement("span");
       ok.className = "ri-a";
@@ -410,6 +453,8 @@ document.querySelectorAll("[data-mode]").forEach((btn) => {
 });
 
 $("btn-next").addEventListener("click", nextQuestion);
+$("btn-dunno").addEventListener("click", () => lockAnswer(null, null));
+$("btn-reveal").addEventListener("click", showTranslations);
 
 $("btn-quit").addEventListener("click", () => {
   if (confirm("Quit this round? Your progress will be lost.")) {

@@ -213,12 +213,48 @@ body {
 .option:disabled { cursor: default; opacity: 1; }
 .option.dimmed { opacity: 0.45; }
 
+.btn-dunno {
+  background: transparent;
+  color: var(--muted);
+  border: 1.5px dashed var(--border);
+  font-weight: 600;
+}
+.btn-reveal {
+  background: transparent;
+  color: var(--primary-light);
+  border: 1.5px solid var(--border);
+  font-weight: 600;
+}
+
+.translations {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 6px 16px;
+}
+.tr-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+}
+.tr-row:last-child { border-bottom: none; }
+.tr-word { overflow-wrap: anywhere; }
+.tr-mean { color: var(--muted); text-align: right; overflow-wrap: anywhere; }
+.tr-correct .tr-word { font-weight: 700; color: var(--correct); }
+.tr-correct .tr-mean { color: var(--correct); }
+
 .btn-next {
   align-items: center;
   font-weight: 700;
   margin-top: auto;
 }
 .hidden { visibility: hidden; }
+.gone { display: none !important; }
 
 /* ── Result ── */
 .result-card {
@@ -248,6 +284,7 @@ body {
 .review-item .ri-q { font-weight: 700; }
 .review-item .ri-a { color: var(--correct); font-weight: 600; }
 .review-item .ri-x { color: var(--wrong); text-decoration: line-through; margin-right: 6px; }
+.review-item .ri-note { color: var(--muted); font-style: italic; margin-right: 6px; }
 
 .result-actions { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
 .result-actions .btn-primary { align-items: center; font-weight: 700; }
