@@ -1,5 +1,6 @@
 "use strict";
 
+const APP_VERSION = "1.1.0";
 const ROUND_LENGTH = 20;
 const OPTION_COUNT = 4;
 const MAX_SCORES = 10;
@@ -446,6 +447,6 @@ $("btn-clear-mistakes").addEventListener("click", () => {
 });
 
 // ── Init ──
-$("word-count").textContent = `${VOCAB.length} words · works fully offline`;
+$("word-count").textContent = `${VOCAB.length} words · offline · v${APP_VERSION}`;
 renderHomeBest();
 renderHomeMistakes();
