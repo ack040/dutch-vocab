@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.2.1";
 const ROUND_LENGTH = 20;
 const OPTION_COUNT = 4;
 const MAX_SCORES = 10;
@@ -190,7 +190,11 @@ function renderQuestion() {
   q.options.forEach((opt) => {
     const btn = document.createElement("button");
     btn.className = "option";
-    btn.textContent = opt;
+    btn.dataset.value = opt;
+    const label = document.createElement("span");
+    label.className = "opt-label";
+    label.textContent = opt;
+    btn.appendChild(label);
     btn.addEventListener("click", () => lockAnswer(opt, btn));
     box.appendChild(btn);
   });
@@ -198,9 +202,6 @@ function renderQuestion() {
   // Reset the answer-time controls for the fresh question.
   $("btn-dunno").classList.remove("gone");
   $("btn-reveal").classList.add("gone");
-  const panel = $("translations");
-  panel.classList.add("gone");
-  panel.innerHTML = "";
   $("btn-next").classList.add("hidden");
 }
 
@@ -230,7 +231,7 @@ function lockAnswer(chosen, chosenBtn) {
     if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
   }
   buttons.forEach((b) => {
-    if (b.textContent === q.answer) b.classList.add("correct");
+    if (b.dataset.value === q.answer) b.classList.add("correct");
     else if (b !== chosenBtn) b.classList.add("dimmed");
   });
 
@@ -245,25 +246,20 @@ function lockAnswer(chosen, chosenBtn) {
   nextBtn.classList.remove("hidden");
 }
 
-// Reveal the meaning of every multiple-choice option so the learner can
-// study all four words, not just the one they were asked about.
+// Reveal the meaning of every multiple-choice option, inline inside its own
+// answer box, so the learner can study all four words at once. Un-dims the
+// non-selected options so every translation stays readable.
 function showTranslations() {
   const q = round.questions[round.index];
-  const panel = $("translations");
-  panel.innerHTML = "";
-  q.options.forEach((opt) => {
-    const row = document.createElement("div");
-    row.className = "tr-row" + (opt === q.answer ? " tr-correct" : "");
-    const word = document.createElement("span");
-    word.className = "tr-word";
-    word.textContent = opt;
-    const mean = document.createElement("span");
-    mean.className = "tr-mean";
-    mean.textContent = q.translations[opt] || "";
-    row.append(word, mean);
-    panel.appendChild(row);
+  [...$("options").children].forEach((btn) => {
+    btn.classList.remove("dimmed");
+    if (!btn.querySelector(".opt-tr")) {
+      const tr = document.createElement("span");
+      tr.className = "opt-tr";
+      tr.textContent = q.translations[btn.dataset.value] || "";
+      btn.appendChild(tr);
+    }
   });
-  panel.classList.remove("gone");
   $("btn-reveal").classList.add("gone");
 }
 

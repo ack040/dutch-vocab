@@ -226,27 +226,17 @@ body {
   font-weight: 600;
 }
 
-.translations {
-  display: flex;
-  flex-direction: column;
-  background: var(--card);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 6px 16px;
+/* Inline translation revealed inside each option box. */
+.opt-tr {
+  display: block;
+  margin-top: 4px;
+  font-size: 13.5px;
+  font-weight: 400;
+  color: var(--muted);
+  font-style: italic;
 }
-.tr-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 15px;
-}
-.tr-row:last-child { border-bottom: none; }
-.tr-word { overflow-wrap: anywhere; }
-.tr-mean { color: var(--muted); text-align: right; overflow-wrap: anywhere; }
-.tr-correct .tr-word { font-weight: 700; color: var(--correct); }
-.tr-correct .tr-mean { color: var(--correct); }
+.opt-tr::before { content: "→ "; font-style: normal; }
+.option.correct .opt-tr { color: var(--correct); }
 
 .btn-next {
   align-items: center;
