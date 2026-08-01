@@ -36,6 +36,10 @@
         <span class="btn-title">Mixed round</span>
         <span class="btn-sub">Both directions, shuffled</span>
       </button>
+      <button class="btn btn-primary btn-mistakes" id="btn-mistakes" data-mode="mistakes">
+        <span class="btn-title">🎯 Practice mistakes</span>
+        <span class="btn-sub" id="mistakes-sub"></span>
+      </button>
     </section>
 
     <section class="home-best" id="home-best"></section>
@@ -69,7 +73,7 @@
     <section class="result-card">
       <p class="result-emoji" id="result-emoji"></p>
       <h2 id="result-title"></h2>
-      <p class="result-score"><span id="result-score"></span><span class="result-total">/20</span></p>
+      <p class="result-score"><span id="result-score"></span><span class="result-total" id="result-total">/20</span></p>
       <p class="result-detail" id="result-detail"></p>
     </section>
 
@@ -89,7 +93,10 @@
       <h2>🏆 Best scores</h2>
     </header>
     <section id="scores-table"></section>
-    <button class="btn btn-ghost btn-danger" id="btn-clear-scores">Clear all scores</button>
+    <div class="scores-actions">
+      <button class="btn btn-ghost btn-danger" id="btn-clear-mistakes">Clear saved mistakes</button>
+      <button class="btn btn-ghost btn-danger" id="btn-clear-scores">Clear all scores</button>
+    </div>
   </main>
 
   <script src="data.js"></script>

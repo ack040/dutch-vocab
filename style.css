@@ -89,6 +89,11 @@ body {
   touch-action: manipulation;
 }
 .btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn:disabled:active { transform: none; }
+
+.btn.btn-mistakes { background: var(--accent); }
+.btn.btn-mistakes:disabled { background: var(--primary); }
 
 .btn-primary {
   background: var(--primary);
@@ -280,4 +285,9 @@ body {
   box-shadow: var(--shadow);
 }
 
-#btn-clear-scores { margin-top: auto; }
+.scores-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
