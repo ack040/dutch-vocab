@@ -1,4 +1,4 @@
-const CACHE = "dutch-vocab-v5";
+const CACHE = "dutch-vocab-v6";
 const ASSETS = [
   "./",
   "./index.html",
@@ -24,17 +24,19 @@ self.addEventListener("activate", (e) => {
   );
 });
 
+// Network-first: when online, always load the latest version and refresh the
+// cache in the background; when offline, fall back to the cached copy. This
+// keeps the app fully usable offline while ensuring updates appear on the next
+// refresh instead of getting stuck behind a stale cache.
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then(
-      (cached) =>
-        cached ||
-        fetch(e.request).then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy));
-          return res;
-        })
-    )
+    fetch(e.request)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy));
+        return res;
+      })
+      .catch(() => caches.match(e.request, { ignoreSearch: true }))
   );
 });
