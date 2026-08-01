@@ -4,11 +4,13 @@ const ROUND_LENGTH = 20;
 const OPTION_COUNT = 4;
 const MAX_SCORES = 10;
 const STORAGE_KEY = "dutch-vocab-scores-v1";
+const MISTAKES_KEY = "dutch-vocab-mistakes-v1";
 
 const MODES = {
   "nl-en": "NL → EN",
   "en-nl": "EN → NL",
   "mixed": "Mixed",
+  "mistakes": "Mistakes",
 };
 
 // ── State ──
@@ -64,45 +66,102 @@ function wordClass(entry) {
   return "other";
 }
 
+// ── Mistakes bank (persistent record of missed words) ──
+// Each item: { nl, en, dir, count, last } keyed by nl + direction, so a
+// word missed reading Dutch and missed recalling Dutch are tracked apart.
+function loadMistakes() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MISTAKES_KEY));
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveMistakes(list) {
+  localStorage.setItem(MISTAKES_KEY, JSON.stringify(list));
+}
+
+function mistakeKey(nl, dir) {
+  return nl + "|" + dir;
+}
+
+function recordMistake(q) {
+  const list = loadMistakes();
+  const key = mistakeKey(q.nl, q.dir);
+  const existing = list.find((x) => mistakeKey(x.nl, x.dir) === key);
+  const now = new Date().toISOString();
+  if (existing) {
+    existing.count++;
+    existing.last = now;
+  } else {
+    list.push({ nl: q.nl, en: q.en, dir: q.dir, count: 1, last: now });
+  }
+  saveMistakes(list);
+}
+
+function masterMistake(q) {
+  const key = mistakeKey(q.nl, q.dir);
+  saveMistakes(loadMistakes().filter((x) => mistakeKey(x.nl, x.dir) !== key));
+}
+
 // ── Round building ──
-function buildRound(mode) {
-  const picked = shuffle(VOCAB).slice(0, ROUND_LENGTH);
-  const questions = picked.map((entry, i) => {
-    const dir = mode === "mixed" ? (Math.random() < 0.5 ? "nl-en" : "en-nl") : mode;
-    const promptKey = dir === "nl-en" ? "nl" : "en";
-    const answerKey = dir === "nl-en" ? "en" : "nl";
-    const answer = entry[answerKey];
+function makeQuestion(entry, dir) {
+  const promptKey = dir === "nl-en" ? "nl" : "en";
+  const answerKey = dir === "nl-en" ? "en" : "nl";
+  const answer = entry[answerKey];
 
-    // Prefer distractors of the same word class (noun/verb/other); if a
-    // pass can't fill all slots, retry without the class restriction.
-    const cls = wordClass(entry);
-    const pool = shuffle(VOCAB);
-    const distractors = [];
-    for (const sameClassOnly of [true, false]) {
-      for (const cand of pool) {
-        if (distractors.length >= OPTION_COUNT - 1) break;
-        if (cand === entry) continue;
-        if (sameClassOnly && wordClass(cand) !== cls) continue;
-        const val = cand[answerKey];
-        if (val === answer) continue;
-        if (overlaps(val, answer)) continue;
-        if (distractors.some((d) => d === val || overlaps(d, val))) continue;
-        distractors.push(val);
-      }
+  // Prefer distractors of the same word class (noun/verb/other); if a
+  // pass can't fill all slots, retry without the class restriction.
+  const cls = wordClass(entry);
+  const pool = shuffle(VOCAB);
+  const distractors = [];
+  for (const sameClassOnly of [true, false]) {
+    for (const cand of pool) {
+      if (distractors.length >= OPTION_COUNT - 1) break;
+      if (cand.nl === entry.nl) continue;
+      if (sameClassOnly && wordClass(cand) !== cls) continue;
+      const val = cand[answerKey];
+      if (val === answer) continue;
+      if (overlaps(val, answer)) continue;
+      if (distractors.some((d) => d === val || overlaps(d, val))) continue;
+      distractors.push(val);
     }
+  }
 
-    return {
-      dir,
-      prompt: entry[promptKey],
-      answer,
-      options: shuffle([answer, ...distractors]),
-    };
-  });
+  return {
+    dir,
+    nl: entry.nl,
+    en: entry.en,
+    prompt: entry[promptKey],
+    answer,
+    options: shuffle([answer, ...distractors]),
+  };
+}
+
+function buildRound(mode) {
+  let questions;
+  if (mode === "mistakes") {
+    // Most-missed first, then most recent; replay the exact direction missed.
+    const bank = loadMistakes()
+      .slice()
+      .sort((a, b) => b.count - a.count || new Date(b.last) - new Date(a.last));
+    questions = bank
+      .slice(0, ROUND_LENGTH)
+      .map((m) => makeQuestion({ nl: m.nl, en: m.en }, m.dir));
+  } else {
+    const picked = shuffle(VOCAB).slice(0, ROUND_LENGTH);
+    questions = picked.map((entry) => {
+      const dir = mode === "mixed" ? (Math.random() < 0.5 ? "nl-en" : "en-nl") : mode;
+      return makeQuestion(entry, dir);
+    });
+  }
   return { mode, questions, index: 0, score: 0, mistakes: [] };
 }
 
 // ── Quiz flow ──
 function startRound(mode) {
+  if (mode === "mistakes" && loadMistakes().length === 0) return;
   round = buildRound(mode);
   show("quiz");
   renderQuestion();
@@ -110,9 +169,10 @@ function startRound(mode) {
 
 function renderQuestion() {
   const q = round.questions[round.index];
+  const total = round.questions.length;
 
-  $("progress-fill").style.width = `${(round.index / ROUND_LENGTH) * 100}%`;
-  $("q-number").textContent = `Question ${round.index + 1}/${ROUND_LENGTH}`;
+  $("progress-fill").style.width = `${(round.index / total) * 100}%`;
+  $("q-number").textContent = `Question ${round.index + 1}/${total}`;
   $("q-score").textContent = `✓ ${round.score}`;
   $("direction-label").textContent =
     q.dir === "nl-en" ? "What does this mean in English?" : "What is the Dutch word?";
@@ -133,6 +193,7 @@ function renderQuestion() {
 
 function answer(btn, chosen) {
   const q = round.questions[round.index];
+  const total = round.questions.length;
   const buttons = [...$("options").children];
   buttons.forEach((b) => (b.disabled = true));
 
@@ -140,10 +201,13 @@ function answer(btn, chosen) {
   if (correct) {
     round.score++;
     btn.classList.add("correct");
+    // In mistakes mode a correct answer retires the word from the bank.
+    if (round.mode === "mistakes") masterMistake(q);
     if (navigator.vibrate) navigator.vibrate(15);
   } else {
     btn.classList.add("wrong");
     round.mistakes.push({ prompt: q.prompt, answer: q.answer, chosen });
+    recordMistake(q); // remember it for Practice mistakes
     if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
   }
   buttons.forEach((b) => {
@@ -152,16 +216,16 @@ function answer(btn, chosen) {
   });
 
   $("q-score").textContent = `✓ ${round.score}`;
-  $("progress-fill").style.width = `${((round.index + 1) / ROUND_LENGTH) * 100}%`;
+  $("progress-fill").style.width = `${((round.index + 1) / total) * 100}%`;
 
   const nextBtn = $("btn-next");
-  nextBtn.textContent = round.index + 1 < ROUND_LENGTH ? "Next" : "See result";
+  nextBtn.textContent = round.index + 1 < total ? "Next" : "See result";
   nextBtn.classList.remove("hidden");
 }
 
 function nextQuestion() {
   round.index++;
-  if (round.index < ROUND_LENGTH) {
+  if (round.index < round.questions.length) {
     renderQuestion();
   } else {
     finishRound();
@@ -198,31 +262,51 @@ function formatDate(iso) {
 }
 
 function finishRound() {
-  const { score, mode, mistakes } = round;
-  const isNewBest = recordScore(score, mode);
+  const { score, mode, mistakes, questions } = round;
+  const total = questions.length;
+  // Best-scores table is for the standard 20-question rounds only; the
+  // variable-length mistakes round is about clearing words, not high scores.
+  const isNewBest = mode === "mistakes" ? false : recordScore(score, mode);
+  const pct = total ? Math.round((score / total) * 100) : 0;
+  const remaining = loadMistakes().length;
 
-  const pct = Math.round((score / ROUND_LENGTH) * 100);
   let emoji, title;
-  if (score === ROUND_LENGTH) { emoji = "🏆"; title = "Perfect round!"; }
-  else if (pct >= 85) { emoji = "🎉"; title = "Uitstekend!"; }
-  else if (pct >= 70) { emoji = "👏"; title = "Goed gedaan!"; }
-  else if (pct >= 50) { emoji = "💪"; title = "Niet slecht!"; }
-  else { emoji = "📚"; title = "Blijven oefenen!"; }
+  if (mode === "mistakes" && remaining === 0) {
+    emoji = "🎉"; title = "All caught up!";
+  } else if (score === total) {
+    emoji = "🏆"; title = "Perfect round!";
+  } else if (pct >= 85) {
+    emoji = "🎉"; title = "Uitstekend!";
+  } else if (pct >= 70) {
+    emoji = "👏"; title = "Goed gedaan!";
+  } else if (pct >= 50) {
+    emoji = "💪"; title = "Niet slecht!";
+  } else {
+    emoji = "📚"; title = "Blijven oefenen!";
+  }
 
   $("result-emoji").textContent = emoji;
   $("result-title").textContent = title;
   $("result-score").textContent = score;
-  $("result-detail").innerHTML =
-    `${pct}% · ${MODES[mode]}` +
-    (isNewBest ? ' · <span class="new-best">New best score!</span>' : "");
+  $("result-total").textContent = `/${total}`;
+
+  let detail = `${pct}% · ${MODES[mode]}`;
+  if (mode === "mistakes") {
+    detail += remaining === 0
+      ? ' · <span class="new-best">no mistakes left!</span>'
+      : ` · ${remaining} word${remaining === 1 ? "" : "s"} still to review`;
+  } else if (isNewBest) {
+    detail += ' · <span class="new-best">New best score!</span>';
+  }
+  $("result-detail").innerHTML = detail;
 
   const review = $("review");
   review.innerHTML = "";
   if (mistakes.length) {
-    const title = document.createElement("p");
-    title.className = "review-title";
-    title.textContent = `Review (${mistakes.length})`;
-    review.appendChild(title);
+    const heading = document.createElement("p");
+    heading.className = "review-title";
+    heading.textContent = `Review (${mistakes.length})`;
+    review.appendChild(heading);
     mistakes.forEach((m) => {
       const item = document.createElement("div");
       item.className = "review-item";
@@ -242,14 +326,28 @@ function finishRound() {
     });
   }
 
+  // "Play again" has nothing to repeat if the mistakes bank is now empty.
+  const again = $("btn-again");
+  if (mode === "mistakes" && remaining === 0) {
+    again.style.display = "none";
+  } else {
+    again.style.display = "";
+    again.textContent = mode === "mistakes" ? "Practise again" : "Play again";
+  }
+
   show("result");
   renderHomeBest();
+  renderHomeMistakes();
 }
 
 function renderScoresTable() {
   const scores = loadScores();
   const box = $("scores-table");
   box.innerHTML = "";
+
+  const nMistakes = loadMistakes().length;
+  $("btn-clear-mistakes").style.display = nMistakes ? "" : "none";
+  $("btn-clear-mistakes").textContent = `Clear saved mistakes (${nMistakes})`;
 
   if (!scores.length) {
     box.innerHTML = '<div class="scores-empty">No rounds played yet.<br>Finish a round and your best scores will appear here.</div>';
@@ -283,6 +381,19 @@ function renderHomeBest() {
   box.innerHTML = `Best score: <strong>${best.score}/20</strong> &middot; ${MODES[best.mode] || best.mode} &middot; ${formatDate(best.date)}`;
 }
 
+function renderHomeMistakes() {
+  const n = loadMistakes().length;
+  const btn = $("btn-mistakes");
+  const sub = $("mistakes-sub");
+  if (n === 0) {
+    btn.disabled = true;
+    sub.textContent = "No saved mistakes yet";
+  } else {
+    btn.disabled = false;
+    sub.textContent = `${n} word${n === 1 ? "" : "s"} to review`;
+  }
+}
+
 function openScores(from) {
   scoresBackTarget = from;
   renderScoresTable();
@@ -291,7 +402,10 @@ function openScores(from) {
 
 // ── Wiring ──
 document.querySelectorAll("[data-mode]").forEach((btn) => {
-  btn.addEventListener("click", () => startRound(btn.dataset.mode));
+  btn.addEventListener("click", () => {
+    if (btn.disabled) return;
+    startRound(btn.dataset.mode);
+  });
 });
 
 $("btn-next").addEventListener("click", nextQuestion);
@@ -303,7 +417,13 @@ $("btn-quit").addEventListener("click", () => {
   }
 });
 
-$("btn-again").addEventListener("click", () => startRound(round.mode));
+$("btn-again").addEventListener("click", () => {
+  if (round.mode === "mistakes" && loadMistakes().length === 0) {
+    show("home");
+    return;
+  }
+  startRound(round.mode);
+});
 $("btn-result-home").addEventListener("click", () => show("home"));
 $("btn-scores").addEventListener("click", () => openScores("home"));
 $("btn-result-scores").addEventListener("click", () => openScores("result"));
@@ -317,6 +437,15 @@ $("btn-clear-scores").addEventListener("click", () => {
   }
 });
 
+$("btn-clear-mistakes").addEventListener("click", () => {
+  if (confirm("Delete all saved mistakes?")) {
+    localStorage.removeItem(MISTAKES_KEY);
+    renderScoresTable();
+    renderHomeMistakes();
+  }
+});
+
 // ── Init ──
 $("word-count").textContent = `${VOCAB.length} words · works fully offline`;
 renderHomeBest();
+renderHomeMistakes();
