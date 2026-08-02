@@ -74,7 +74,7 @@
 
     <section class="home-best" id="home-best"></section>
 
-    <button class="btn btn-ghost" id="btn-scores">🏆 Best scores</button>
+    <button class="btn btn-ghost" id="btn-scores">📊 Progress</button>
     <p class="word-count" id="word-count"></p>
   </main>
 
@@ -115,7 +115,7 @@
 
     <div class="result-actions">
       <button class="btn btn-primary" id="btn-again">Play again</button>
-      <button class="btn btn-ghost" id="btn-result-scores">🏆 Best scores</button>
+      <button class="btn btn-ghost" id="btn-result-scores">📊 Progress</button>
       <button class="btn btn-ghost" id="btn-result-home">Home</button>
     </div>
   </main>
@@ -124,12 +124,13 @@
   <main id="screen-scores" class="screen">
     <header class="scores-header">
       <button class="quit" id="btn-scores-back" aria-label="Back">←</button>
-      <h2>🏆 Best scores</h2>
+      <h2>📊 Progress</h2>
     </header>
-    <section id="scores-table"></section>
+    <section id="progress-chart"></section>
+    <p class="progress-stats" id="progress-stats"></p>
     <div class="scores-actions">
       <button class="btn btn-ghost btn-danger" id="btn-clear-mistakes">Clear saved mistakes</button>
-      <button class="btn btn-ghost btn-danger" id="btn-clear-scores">Clear all scores</button>
+      <button class="btn btn-ghost btn-danger" id="btn-clear-scores">Clear progress history</button>
     </div>
   </main>
 

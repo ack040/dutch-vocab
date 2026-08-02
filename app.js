@@ -1,9 +1,9 @@
 "use strict";
 
-const APP_VERSION = "1.6.1";
+const APP_VERSION = "1.7.0";
 const ROUND_LENGTH = 20;
 const OPTION_COUNT = 4;
-const MAX_SCORES = 10;
+const HISTORY_MAX = 300;
 const PROFILE_KEY = "dutch-vocab-profile";
 
 // Adaptive tuning
@@ -489,8 +489,8 @@ function showPlacementResult(ability) {
   show("result");
 }
 
-// ── Results & scores (per user) ──
-function loadScores() {
+// ── Round history (per user) — every 20-question round, in time order ──
+function loadHistory() {
   try {
     const raw = JSON.parse(localStorage.getItem(scoresKey()));
     return Array.isArray(raw) ? raw : [];
@@ -498,16 +498,15 @@ function loadScores() {
     return [];
   }
 }
-function saveScores(scores) {
-  localStorage.setItem(scoresKey(), JSON.stringify(scores));
+function saveHistory(list) {
+  localStorage.setItem(scoresKey(), JSON.stringify(list));
 }
-function recordScore(score, mode, level) {
-  const scores = loadScores();
-  const prevBest = scores.length ? Math.max(...scores.map((s) => s.score)) : -1;
-  scores.push({ score, mode, level, date: new Date().toISOString() });
-  scores.sort((a, b) => b.score - a.score || new Date(b.date) - new Date(a.date));
-  saveScores(scores.slice(0, MAX_SCORES));
-  return score > prevBest;
+function recordHistory(score, mode, level) {
+  const list = loadHistory();
+  const prevBest = list.length ? Math.max(...list.map((s) => s.score)) : -1;
+  list.push({ score, mode, level, date: new Date().toISOString() });
+  saveHistory(list.slice(-HISTORY_MAX));
+  return list.length > 1 && score > prevBest; // a genuine improvement, not the first round
 }
 
 function formatDate(iso) {
@@ -525,7 +524,7 @@ function finishRound() {
   $("btn-result-scores").style.display = "";
   $("btn-result-home").textContent = "Home";
 
-  const isNewBest = mode === "mistakes" ? false : recordScore(score, mode, studyLabel());
+  const isNewBest = mode === "mistakes" ? false : recordHistory(score, mode, studyLabel());
   const pct = total ? Math.round((score / total) * 100) : 0;
 
   // Per-round adaptive difficulty adjustment.
@@ -610,47 +609,95 @@ function finishRound() {
   applyProfile();
 }
 
-function renderScoresTable() {
-  const scores = loadScores();
-  const box = $("scores-table");
-  box.innerHTML = "";
+// Build an inline SVG line chart of round scores over time (0–20 on the y axis,
+// real timestamps on the x axis). No external libraries — works offline.
+function buildChartSVG(history) {
+  const W = 320, H = 200;
+  const padL = 24, padR = 10, padT = 12, padB = 24;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  const pts = history
+    .map((h) => ({ t: new Date(h.date).getTime(), score: h.score }))
+    .filter((p) => !isNaN(p.t))
+    .sort((a, b) => a.t - b.t);
+
+  const minT = pts[0].t;
+  const maxT = pts[pts.length - 1].t;
+  const spanT = maxT - minT;
+  const x = (t) => (spanT === 0 ? padL + plotW / 2 : padL + ((t - minT) / spanT) * plotW);
+  const y = (s) => padT + (1 - s / 20) * plotH;
+
+  let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Score over time">`;
+  // horizontal gridlines + y labels at 0,5,10,15,20
+  for (const s of [0, 5, 10, 15, 20]) {
+    const yy = y(s).toFixed(1);
+    svg += `<line class="chart-grid" x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}"/>`;
+    svg += `<text class="chart-axis-label" x="${padL - 4}" y="${(y(s) + 3).toFixed(1)}" text-anchor="end">${s}</text>`;
+  }
+  // area + line
+  if (pts.length > 1) {
+    const line = pts.map((p) => `${x(p.t).toFixed(1)},${y(p.score).toFixed(1)}`).join(" ");
+    const area = `${padL},${y(0).toFixed(1)} ` + line + ` ${(x(maxT)).toFixed(1)},${y(0).toFixed(1)}`;
+    svg += `<polygon class="chart-area" points="${area}"/>`;
+    svg += `<polyline class="chart-line" points="${line}"/>`;
+  }
+  // dots
+  pts.forEach((p) => {
+    svg += `<circle class="chart-dot" cx="${x(p.t).toFixed(1)}" cy="${y(p.score).toFixed(1)}" r="${pts.length > 40 ? 1.6 : 3}"/>`;
+  });
+  // x labels: first & last date (and middle if room)
+  const shortDate = (t) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  const yLbl = H - 6;
+  if (spanT === 0) {
+    svg += `<text class="chart-axis-label" x="${(padL + plotW / 2).toFixed(1)}" y="${yLbl}" text-anchor="middle">${shortDate(minT)}</text>`;
+  } else {
+    svg += `<text class="chart-axis-label" x="${padL}" y="${yLbl}" text-anchor="start">${shortDate(minT)}</text>`;
+    svg += `<text class="chart-axis-label" x="${W - padR}" y="${yLbl}" text-anchor="end">${shortDate(maxT)}</text>`;
+  }
+  svg += `</svg>`;
+  return svg;
+}
+
+function renderProgress() {
+  const history = loadHistory();
+  const chart = $("progress-chart");
+  const stats = $("progress-stats");
 
   const nMistakes = loadMistakes().length;
   $("btn-clear-mistakes").style.display = nMistakes ? "" : "none";
   $("btn-clear-mistakes").textContent = `Clear saved mistakes (${nMistakes})`;
 
-  if (!scores.length) {
-    box.innerHTML = '<div class="scores-empty">No rounds played yet.<br>Finish a round and your best scores will appear here.</div>';
+  if (!history.length) {
+    chart.innerHTML = '<div class="scores-empty">No rounds yet.<br>Finish a 20-question round and your progress chart will appear here.</div>';
+    stats.textContent = "";
     $("btn-clear-scores").style.display = "none";
     return;
   }
   $("btn-clear-scores").style.display = "";
 
-  const table = document.createElement("div");
-  table.className = "scores-table";
-  scores.forEach((s, i) => {
-    const row = document.createElement("div");
-    row.className = "score-row" + (i === 0 ? " top" : "");
-    const meta = (s.level ? s.level + " · " : "") + (MODES[s.mode] || s.mode);
-    row.innerHTML =
-      `<span class="score-rank">${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</span>` +
-      `<span class="score-val">${s.score}/20</span>` +
-      `<span class="score-meta">${meta}<br>${formatDate(s.date)}</span>`;
-    table.appendChild(row);
-  });
-  box.appendChild(table);
+  chart.innerHTML = buildChartSVG(history);
+
+  const scores = history.map((h) => h.score);
+  const best = Math.max(...scores);
+  const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+  const last = history[history.length - 1];
+  stats.innerHTML =
+    `<strong>${history.length}</strong> round${history.length === 1 ? "" : "s"} · ` +
+    `avg <strong>${avg}</strong>/20 · best <strong>${best}</strong>/20 · ` +
+    `last ${last.score}/20 (${formatDate(last.date)})`;
 }
 
-function renderHomeBest() {
-  const scores = loadScores();
+function renderHomeStats() {
+  const history = loadHistory();
   const box = $("home-best");
-  if (!scores.length) {
+  if (!history.length) {
     box.innerHTML = "";
     return;
   }
-  const best = scores[0];
-  const meta = (best.level ? best.level + " · " : "") + (MODES[best.mode] || best.mode);
-  box.innerHTML = `Best score: <strong>${best.score}/20</strong> &middot; ${meta} &middot; ${formatDate(best.date)}`;
+  const scores = history.map((h) => h.score);
+  const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+  box.innerHTML = `<strong>${history.length}</strong> round${history.length === 1 ? "" : "s"} played &middot; average <strong>${avg}/20</strong>`;
 }
 
 function renderHomeMistakes() {
@@ -679,13 +726,13 @@ function applyProfile() {
     $("mix-line").classList.add("gone");
     $("word-count").textContent = `${VOCAB_BY_LEVEL[profile.study].length} words · ${profile.study} · offline · v${APP_VERSION}`;
   }
-  renderHomeBest();
+  renderHomeStats();
   renderHomeMistakes();
 }
 
 function openScores(from) {
   scoresBackTarget = from;
-  renderScoresTable();
+  renderProgress();
   show("scores");
 }
 
@@ -806,16 +853,16 @@ $("reg-name").addEventListener("keydown", (e) => {
 });
 
 $("btn-clear-scores").addEventListener("click", () => {
-  if (confirm("Delete all saved scores for " + profile.name + "?")) {
+  if (confirm("Delete all progress history for " + profile.name + "?")) {
     localStorage.removeItem(scoresKey());
-    renderScoresTable();
-    renderHomeBest();
+    renderProgress();
+    renderHomeStats();
   }
 });
 $("btn-clear-mistakes").addEventListener("click", () => {
   if (confirm("Delete all saved mistakes for " + profile.name + "?")) {
     localStorage.removeItem(mistakesKey());
-    renderScoresTable();
+    renderProgress();
     renderHomeMistakes();
   }
 });
