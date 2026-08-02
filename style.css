@@ -270,6 +270,23 @@ body {
 .prompt-word { font-size: 27px; line-height: 1.25; overflow-wrap: anywhere; }
 
 .options { display: flex; flex-direction: column; gap: 10px; }
+.option-row { display: flex; align-items: stretch; gap: 8px; }
+.option-row .option { flex: 1; }
+.opt-add {
+  flex: 0 0 46px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--primary-light);
+  font-size: 20px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.06s ease, background 0.15s, border-color 0.15s;
+}
+.opt-add:active { transform: scale(0.94); }
+.opt-add.added { background: var(--accent); border-color: var(--accent); color: #fff; }
+.add-hint { font-size: 13px; color: var(--muted); text-align: center; margin-top: -2px; }
 .option {
   background: var(--card);
   border: 2px solid var(--border);

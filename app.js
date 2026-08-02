@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.5.0";
 const ROUND_LENGTH = 20;
 const OPTION_COUNT = 4;
 const MAX_SCORES = 10;
@@ -136,6 +136,26 @@ function masterMistake(q) {
   saveMistakes(loadMistakes().filter((x) => mistakeKey(x.nl, x.dir, x.level) !== key));
 }
 
+// Manual add/remove: let the learner put any shown option into the practice
+// list (e.g. distractor words they also didn't know).
+function isInBank(nl, dir, level) {
+  const k = mistakeKey(nl, dir, level);
+  return loadMistakes().some((x) => mistakeKey(x.nl, x.dir, x.level) === k);
+}
+
+function addToBank(info, dir, level) {
+  const list = loadMistakes();
+  const k = mistakeKey(info.nl, dir, level);
+  if (list.some((x) => mistakeKey(x.nl, x.dir, x.level) === k)) return;
+  list.push({ nl: info.nl, en: info.en, dir, level, count: 1, last: new Date().toISOString() });
+  saveMistakes(list);
+}
+
+function removeFromBank(nl, dir, level) {
+  const k = mistakeKey(nl, dir, level);
+  saveMistakes(loadMistakes().filter((x) => mistakeKey(x.nl, x.dir, x.level) !== k));
+}
+
 // ── Round building ──
 // pool: the vocabulary list distractors are drawn from; level: tag stored on
 // the question so a missed word remembers which level it belongs to.
@@ -164,8 +184,14 @@ function makeQuestion(entry, dir, pool, level) {
 
   // translations maps every option to its counterpart word, so the learner
   // can reveal the meaning of all four choices after answering.
+  // optionInfo maps every option to its full {nl,en} pair, so any option can
+  // be added to the practice list.
   const translations = { [answer]: entry[promptKey] };
-  distractors.forEach((d) => { translations[d.val] = d.other; });
+  const optionInfo = { [answer]: { nl: entry.nl, en: entry.en } };
+  distractors.forEach((d) => {
+    translations[d.val] = d.other;
+    optionInfo[d.val] = dir === "nl-en" ? { nl: d.other, en: d.val } : { nl: d.val, en: d.other };
+  });
 
   return {
     dir,
@@ -176,6 +202,7 @@ function makeQuestion(entry, dir, pool, level) {
     answer,
     options: shuffle([answer, ...distractors.map((d) => d.val)]),
     translations,
+    optionInfo,
   };
 }
 
@@ -224,6 +251,8 @@ function renderQuestion() {
   const box = $("options");
   box.innerHTML = "";
   q.options.forEach((opt) => {
+    const row = document.createElement("div");
+    row.className = "option-row";
     const btn = document.createElement("button");
     btn.className = "option";
     btn.dataset.value = opt;
@@ -232,13 +261,41 @@ function renderQuestion() {
     label.textContent = opt;
     btn.appendChild(label);
     btn.addEventListener("click", () => lockAnswer(opt, btn));
-    box.appendChild(btn);
+    // Per-option "add to practice" button, revealed after answering.
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "opt-add gone";
+    add.dataset.value = opt;
+    add.addEventListener("click", () => toggleAdd(add));
+    row.append(btn, add);
+    box.appendChild(row);
   });
 
   // Reset the answer-time controls for the fresh question.
   $("btn-dunno").classList.remove("gone");
   $("btn-reveal").classList.add("gone");
+  $("add-hint").classList.add("gone");
   $("btn-next").classList.add("hidden");
+}
+
+function setAddState(btn, added) {
+  btn.classList.toggle("added", added);
+  btn.textContent = added ? "✓" : "＋";
+  btn.setAttribute("aria-label", added ? "Remove from practice list" : "Add to practice list");
+}
+
+function toggleAdd(btn) {
+  const q = round.questions[round.index];
+  const info = q.optionInfo[btn.dataset.value];
+  if (!info) return;
+  if (isInBank(info.nl, q.dir, q.level)) {
+    removeFromBank(info.nl, q.dir, q.level);
+    setAddState(btn, false);
+  } else {
+    addToBank(info, q.dir, q.level);
+    setAddState(btn, true);
+    if (navigator.vibrate) navigator.vibrate(10);
+  }
 }
 
 // chosen is the picked option string, or null when "I don't know" was tapped.
@@ -246,7 +303,7 @@ function renderQuestion() {
 function lockAnswer(chosen, chosenBtn) {
   const q = round.questions[round.index];
   const total = round.questions.length;
-  const buttons = [...$("options").children];
+  const buttons = [...$("options").querySelectorAll(".option")];
   buttons.forEach((b) => (b.disabled = true));
 
   const correct = chosen !== null && chosen === q.answer;
@@ -277,6 +334,14 @@ function lockAnswer(chosen, chosenBtn) {
   $("btn-dunno").classList.add("gone");
   $("btn-reveal").classList.remove("gone");
 
+  // Reveal the per-option "add to practice" buttons, reflecting current state.
+  [...$("options").querySelectorAll(".opt-add")].forEach((ab) => {
+    ab.classList.remove("gone");
+    const info = q.optionInfo[ab.dataset.value];
+    setAddState(ab, !!info && isInBank(info.nl, q.dir, q.level));
+  });
+  $("add-hint").classList.remove("gone");
+
   const nextBtn = $("btn-next");
   nextBtn.textContent = round.index + 1 < total ? "Next" : "See result";
   nextBtn.classList.remove("hidden");
@@ -287,7 +352,7 @@ function lockAnswer(chosen, chosenBtn) {
 // non-selected options so every translation stays readable.
 function showTranslations() {
   const q = round.questions[round.index];
-  [...$("options").children].forEach((btn) => {
+  [...$("options").querySelectorAll(".option")].forEach((btn) => {
     btn.classList.remove("dimmed");
     if (!btn.querySelector(".opt-tr")) {
       const tr = document.createElement("span");
