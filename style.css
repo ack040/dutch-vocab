@@ -57,6 +57,89 @@ body {
 }
 .screen.active { display: flex; }
 
+/* ── Registration ── */
+.register-form { display: flex; flex-direction: column; gap: 10px; }
+.reg-label {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.reg-input {
+  font-family: inherit;
+  font-size: 17px;
+  padding: 14px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  width: 100%;
+}
+.reg-input:focus { outline: none; border-color: var(--primary-light); }
+.level-choices { display: flex; flex-direction: column; gap: 8px; }
+.level-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.06s ease, border-color 0.15s, background 0.15s;
+}
+.level-chip:active { transform: scale(0.98); }
+.level-chip.selected { border-color: var(--accent); background: var(--correct-bg); }
+.level-code { font-weight: 800; font-size: 17px; min-width: 34px; }
+.level-desc { color: var(--muted); }
+.level-chip.selected .level-desc { color: var(--text); }
+.btn-register { align-items: center; font-weight: 700; margin-top: 12px; }
+
+/* ── Home top bar ── */
+.home-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.profile-chip { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.profile-avatar {
+  font-size: 20px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.profile-text { display: flex; flex-direction: column; min-width: 0; }
+.profile-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-level { font-size: 13px; color: var(--muted); }
+.btn-change {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  color: var(--primary-light);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.btn-change:active { transform: scale(0.97); }
+.home-title { text-align: center; }
+.home-title h1 { font-size: 26px; letter-spacing: -0.5px; }
+
 /* ── Home ── */
 .hero { text-align: center; padding: 18px 0 4px; }
 .flag {
