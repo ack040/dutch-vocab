@@ -392,25 +392,28 @@ body {
 .scores-header { display: flex; align-items: center; gap: 12px; }
 .scores-header h2 { font-size: 21px; }
 
-.scores-table {
+/* ── Progress chart ── */
+.chart {
+  width: 100%;
+  height: auto;
+  display: block;
   background: var(--card);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  overflow: hidden;
+  padding: 8px;
 }
-.score-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 16px;
-  border-bottom: 1px solid var(--border);
-  font-size: 15px;
+.chart-grid { stroke: var(--border); stroke-width: 1; }
+.chart-axis-label { fill: var(--muted); font-size: 9px; font-family: inherit; }
+.chart-area { fill: var(--accent); opacity: 0.1; }
+.chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-dot { fill: var(--accent); }
+.progress-stats {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
 }
-.score-row:last-child { border-bottom: none; }
-.score-rank { width: 26px; font-weight: 800; color: var(--muted); }
-.score-row.top .score-rank { color: var(--accent); }
-.score-val { font-weight: 800; font-size: 17px; width: 62px; }
-.score-meta { flex: 1; text-align: right; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.progress-stats strong { color: var(--text); }
 
 .scores-empty {
   text-align: center;
