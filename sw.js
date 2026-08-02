@@ -1,4 +1,4 @@
-const CACHE = "dutch-vocab-v10";
+const CACHE = "dutch-vocab-v11";
 const ASSETS = [
   "./",
   "./index.html",
@@ -30,8 +30,15 @@ self.addEventListener("activate", (e) => {
 // refresh instead of getting stuck behind a stale cache.
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  // { cache: "no-store" } bypasses the browser's HTTP cache, so when online we
+  // always get the freshly deployed file (GitHub Pages otherwise lets the
+  // browser hold assets for ~10 min, which made updates look stuck). Offline,
+  // the fetch rejects and we fall back to the cached copy.
+  // Fetch by URL (not the Request object) so the { cache: "no-store" } init
+  // actually takes effect — passing it alongside a Request does not override
+  // the request's own cache mode.
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request.url, { cache: "no-store" })
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));
