@@ -1,10 +1,19 @@
 "use strict";
 
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.6.0";
 const ROUND_LENGTH = 20;
 const OPTION_COUNT = 4;
 const MAX_SCORES = 10;
 const PROFILE_KEY = "dutch-vocab-profile";
+
+// Adaptive tuning
+const ABILITY_SIGMA = 0.85;   // spread of the level mix around the ability
+const START_ABILITY = 3.0;    // default = B1-ish
+const PLACEMENT_SIZE = 12;
+const PLACEMENT_START_IDX = 2; // B1
+const ADAPT_TARGET = 0.7;      // score above this drifts harder, below drifts easier
+const ADAPT_K = 0.8;
+const ADAPT_MAX = 0.4;         // max ability change per round
 
 const MODES = {
   "nl-en": "NL → EN",
@@ -14,9 +23,10 @@ const MODES = {
 };
 
 // ── State ──
-let round = null; // { mode, questions, index, score, mistakes }
-let profile = null; // { name, level }
-let regLevel = null; // level chosen on the registration screen
+let round = null; // { mode, questions, index, score, mistakes, ... }
+let profile = null; // { name, study, ability } — study is "adaptive" or a level code
+let regChoice = null; // choice on the registration screen: "adaptive" or a level code
+let regEditing = false;
 
 // ── Elements ──
 const $ = (id) => document.getElementById(id);
@@ -36,6 +46,8 @@ function show(name) {
 }
 
 // ── Utilities ──
+function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
+
 function shuffle(arr) {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -69,11 +81,56 @@ function wordClass(entry) {
   return "other";
 }
 
-// ── Profiles (username + level) ──
+function levelVocab(level) {
+  return VOCAB_BY_LEVEL[level] || [];
+}
+function allVocab() {
+  return LEVELS.flatMap((l) => VOCAB_BY_LEVEL[l]);
+}
+
+// ── Ability → level mix ──
+function abilityWeights(ability) {
+  return LEVELS.map((_, i) => Math.exp(-Math.pow((i + 1) - ability, 2) / (2 * ABILITY_SIGMA * ABILITY_SIGMA)));
+}
+
+function sampleLevel(ability) {
+  const w = abilityWeights(ability);
+  const sum = w.reduce((a, b) => a + b, 0);
+  let r = Math.random() * sum;
+  for (let i = 0; i < w.length; i++) {
+    r -= w[i];
+    if (r <= 0) return LEVELS[i];
+  }
+  return LEVELS[LEVELS.length - 1];
+}
+
+// A readable mix like [{level:"A2",pct:20},{level:"B1",pct:55},{level:"B2",pct:25}]
+function abilityMix(ability) {
+  const w = abilityWeights(ability);
+  const sum = w.reduce((a, b) => a + b, 0);
+  let mix = LEVELS.map((lv, i) => ({ level: lv, pct: w[i] / sum })).filter((m) => m.pct >= 0.06);
+  const s2 = mix.reduce((a, m) => a + m.pct, 0);
+  mix.forEach((m) => { m.pct = Math.round((m.pct / s2) * 100); });
+  const diff = 100 - mix.reduce((a, m) => a + m.pct, 0);
+  if (mix.length) mix.sort((a, b) => b.pct - a.pct)[0].pct += diff; // absorb rounding
+  return mix.sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level));
+}
+
+function nearestLevel(ability) {
+  return LEVELS[clamp(Math.round(ability) - 1, 0, LEVELS.length - 1)];
+}
+
+// ── Profiles (username + study choice + ability) ──
 function loadProfile() {
   try {
     const raw = JSON.parse(localStorage.getItem(PROFILE_KEY));
-    if (raw && raw.name && LEVELS.includes(raw.level)) return raw;
+    if (raw && raw.name) {
+      const study = raw.study || raw.level; // migrate old {name,level}
+      const ability = typeof raw.ability === "number" ? raw.ability : START_ABILITY;
+      if (study === "adaptive" || LEVELS.includes(study)) {
+        return { name: raw.name, study, ability };
+      }
+    }
   } catch {}
   return null;
 }
@@ -82,23 +139,18 @@ function saveProfile(p) {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
 }
 
-function levelVocab(level) {
-  return VOCAB_BY_LEVEL[level] || [];
+function isAdaptive() {
+  return profile.study === "adaptive";
 }
-
-function currentVocab() {
-  return levelVocab(profile.level);
+function studyLabel() {
+  return isAdaptive() ? "Adaptive" : profile.study;
 }
 
 // Per-user storage keys, so each username keeps its own scores/mistakes.
-function scoresKey() {
-  return "dutch-vocab-scores::" + profile.name;
-}
-function mistakesKey() {
-  return "dutch-vocab-mistakes::" + profile.name;
-}
+function scoresKey() { return "dutch-vocab-scores::" + profile.name; }
+function mistakesKey() { return "dutch-vocab-mistakes::" + profile.name; }
 
-// ── Mistakes bank (per user, persistent record of missed words) ──
+// ── Mistakes bank (per user) ──
 // Each item: { nl, en, dir, level, count, last }, keyed by nl+dir+level.
 function loadMistakes() {
   try {
@@ -108,15 +160,12 @@ function loadMistakes() {
     return [];
   }
 }
-
 function saveMistakes(list) {
   localStorage.setItem(mistakesKey(), JSON.stringify(list));
 }
-
 function mistakeKey(nl, dir, level) {
   return nl + "|" + dir + "|" + level;
 }
-
 function recordMistake(q) {
   const list = loadMistakes();
   const key = mistakeKey(q.nl, q.dir, q.level);
@@ -130,19 +179,14 @@ function recordMistake(q) {
   }
   saveMistakes(list);
 }
-
 function masterMistake(q) {
   const key = mistakeKey(q.nl, q.dir, q.level);
   saveMistakes(loadMistakes().filter((x) => mistakeKey(x.nl, x.dir, x.level) !== key));
 }
-
-// Manual add/remove: let the learner put any shown option into the practice
-// list (e.g. distractor words they also didn't know).
 function isInBank(nl, dir, level) {
   const k = mistakeKey(nl, dir, level);
   return loadMistakes().some((x) => mistakeKey(x.nl, x.dir, x.level) === k);
 }
-
 function addToBank(info, dir, level) {
   const list = loadMistakes();
   const k = mistakeKey(info.nl, dir, level);
@@ -150,25 +194,20 @@ function addToBank(info, dir, level) {
   list.push({ nl: info.nl, en: info.en, dir, level, count: 1, last: new Date().toISOString() });
   saveMistakes(list);
 }
-
 function removeFromBank(nl, dir, level) {
   const k = mistakeKey(nl, dir, level);
   saveMistakes(loadMistakes().filter((x) => mistakeKey(x.nl, x.dir, x.level) !== k));
 }
 
 // ── Round building ──
-// pool: the vocabulary list distractors are drawn from; level: tag stored on
-// the question so a missed word remembers which level it belongs to.
 function makeQuestion(entry, dir, pool, level) {
   const promptKey = dir === "nl-en" ? "nl" : "en";
   const answerKey = dir === "nl-en" ? "en" : "nl";
   const answer = entry[answerKey];
 
-  // Prefer distractors of the same word class (noun/verb/other); if a
-  // pass can't fill all slots, retry without the class restriction.
   const cls = wordClass(entry);
   const shuffled = shuffle(pool);
-  const distractors = []; // { val, other } — val in answer language, other its translation
+  const distractors = []; // { val, other }
   for (const sameClassOnly of [true, false]) {
     for (const cand of shuffled) {
       if (distractors.length >= OPTION_COUNT - 1) break;
@@ -182,10 +221,6 @@ function makeQuestion(entry, dir, pool, level) {
     }
   }
 
-  // translations maps every option to its counterpart word, so the learner
-  // can reveal the meaning of all four choices after answering.
-  // optionInfo maps every option to its full {nl,en} pair, so any option can
-  // be added to the practice list.
   const translations = { [answer]: entry[promptKey] };
   const optionInfo = { [answer]: { nl: entry.nl, en: entry.en } };
   distractors.forEach((d) => {
@@ -206,25 +241,40 @@ function makeQuestion(entry, dir, pool, level) {
   };
 }
 
+function pickDir(mode) {
+  return mode === "mixed" ? (Math.random() < 0.5 ? "nl-en" : "en-nl") : mode;
+}
+
 function buildRound(mode) {
   let questions;
   if (mode === "mistakes") {
-    // Most-missed first, then most recent; replay the exact direction missed.
-    // Distractors come from the level the missed word belongs to.
     const bank = loadMistakes()
       .slice()
       .sort((a, b) => b.count - a.count || new Date(b.last) - new Date(a.last));
     questions = bank.slice(0, ROUND_LENGTH).map((m) => {
-      const pool = levelVocab(m.level).length ? levelVocab(m.level) : currentVocab();
+      const pool = levelVocab(m.level).length ? levelVocab(m.level) : allVocab();
       return makeQuestion({ nl: m.nl, en: m.en }, m.dir, pool, m.level);
     });
+  } else if (isAdaptive()) {
+    // Sample each question's level from the ability distribution.
+    const used = new Set();
+    questions = [];
+    for (let i = 0; i < ROUND_LENGTH; i++) {
+      let entry, level, tries = 0;
+      do {
+        level = sampleLevel(profile.ability);
+        const pool = VOCAB_BY_LEVEL[level];
+        entry = pool[Math.floor(Math.random() * pool.length)];
+        tries++;
+      } while (used.has(entry.nl) && tries < 12);
+      used.add(entry.nl);
+      questions.push(makeQuestion(entry, pickDir(mode), VOCAB_BY_LEVEL[level], level));
+    }
   } else {
-    const pool = currentVocab();
+    const level = profile.study;
+    const pool = VOCAB_BY_LEVEL[level];
     const picked = shuffle(pool).slice(0, ROUND_LENGTH);
-    questions = picked.map((entry) => {
-      const dir = mode === "mixed" ? (Math.random() < 0.5 ? "nl-en" : "en-nl") : mode;
-      return makeQuestion(entry, dir, pool, profile.level);
-    });
+    questions = picked.map((entry) => makeQuestion(entry, pickDir(mode), pool, level));
   }
   return { mode, questions, index: 0, score: 0, mistakes: [] };
 }
@@ -237,13 +287,18 @@ function startRound(mode) {
   renderQuestion();
 }
 
+function roundTotal() {
+  return round.size || round.questions.length;
+}
+
 function renderQuestion() {
   const q = round.questions[round.index];
-  const total = round.questions.length;
+  const total = roundTotal();
 
   $("progress-fill").style.width = `${(round.index / total) * 100}%`;
-  $("q-number").textContent = `Question ${round.index + 1}/${total}`;
-  $("q-score").textContent = `✓ ${round.score}`;
+  const label = round.mode === "placement" ? "Placement" : `Question`;
+  $("q-number").textContent = `${label} ${round.index + 1}/${total}`;
+  $("q-score").textContent = round.mode === "placement" ? "" : `✓ ${round.score}`;
   $("direction-label").textContent =
     q.dir === "nl-en" ? "What does this mean in English?" : "What is the Dutch word?";
   $("prompt-word").textContent = q.prompt;
@@ -256,12 +311,11 @@ function renderQuestion() {
     const btn = document.createElement("button");
     btn.className = "option";
     btn.dataset.value = opt;
-    const label = document.createElement("span");
-    label.className = "opt-label";
-    label.textContent = opt;
-    btn.appendChild(label);
+    const lbl = document.createElement("span");
+    lbl.className = "opt-label";
+    lbl.textContent = opt;
+    btn.appendChild(lbl);
     btn.addEventListener("click", () => lockAnswer(opt, btn));
-    // Per-option "add to practice" button, revealed after answering.
     const add = document.createElement("button");
     add.type = "button";
     add.className = "opt-add gone";
@@ -271,7 +325,6 @@ function renderQuestion() {
     box.appendChild(row);
   });
 
-  // Reset the answer-time controls for the fresh question.
   $("btn-dunno").classList.remove("gone");
   $("btn-reveal").classList.add("gone");
   $("add-hint").classList.add("gone");
@@ -298,29 +351,19 @@ function toggleAdd(btn) {
   }
 }
 
-// chosen is the picked option string, or null when "I don't know" was tapped.
-// chosenBtn is the option button element, or null for "I don't know".
 function lockAnswer(chosen, chosenBtn) {
   const q = round.questions[round.index];
-  const total = round.questions.length;
+  const total = roundTotal();
   const buttons = [...$("options").querySelectorAll(".option")];
   buttons.forEach((b) => (b.disabled = true));
 
   const correct = chosen !== null && chosen === q.answer;
   if (correct) {
     round.score++;
-    chosenBtn.classList.add("correct");
-    // In mistakes mode a correct answer retires the word from the bank.
-    if (round.mode === "mistakes") masterMistake(q);
+    if (chosenBtn) chosenBtn.classList.add("correct");
     if (navigator.vibrate) navigator.vibrate(15);
   } else {
     if (chosenBtn) chosenBtn.classList.add("wrong");
-    round.mistakes.push({
-      prompt: q.prompt,
-      answer: q.answer,
-      chosen: chosen === null ? "(didn't know)" : chosen,
-    });
-    recordMistake(q); // remember it for Practice mistakes
     if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
   }
   buttons.forEach((b) => {
@@ -328,28 +371,40 @@ function lockAnswer(chosen, chosenBtn) {
     else if (b !== chosenBtn) b.classList.add("dimmed");
   });
 
-  $("q-score").textContent = `✓ ${round.score}`;
+  $("q-score").textContent = round.mode === "placement" ? "" : `✓ ${round.score}`;
   $("progress-fill").style.width = `${((round.index + 1) / total) * 100}%`;
-
   $("btn-dunno").classList.add("gone");
-  $("btn-reveal").classList.remove("gone");
 
-  // Reveal the per-option "add to practice" buttons, reflecting current state.
-  [...$("options").querySelectorAll(".opt-add")].forEach((ab) => {
-    ab.classList.remove("gone");
-    const info = q.optionInfo[ab.dataset.value];
-    setAddState(ab, !!info && isInBank(info.nl, q.dir, q.level));
-  });
-  $("add-hint").classList.remove("gone");
+  if (round.mode === "placement") {
+    // Adaptive staircase: harder after a correct answer, easier after a wrong one.
+    round.results.push({ levelIdx: q.levelIdx, correct });
+    round.levelIdx = clamp(round.levelIdx + (correct ? 1 : -1), 0, LEVELS.length - 1);
+  } else {
+    if (correct) {
+      if (round.mode === "mistakes") masterMistake(q);
+    } else {
+      round.mistakes.push({
+        prompt: q.prompt,
+        answer: q.answer,
+        chosen: chosen === null ? "(didn't know)" : chosen,
+      });
+      recordMistake(q);
+    }
+    // Reveal the meaning + per-option add buttons.
+    $("btn-reveal").classList.remove("gone");
+    [...$("options").querySelectorAll(".opt-add")].forEach((ab) => {
+      ab.classList.remove("gone");
+      const info = q.optionInfo[ab.dataset.value];
+      setAddState(ab, !!info && isInBank(info.nl, q.dir, q.level));
+    });
+    $("add-hint").classList.remove("gone");
+  }
 
   const nextBtn = $("btn-next");
   nextBtn.textContent = round.index + 1 < total ? "Next" : "See result";
   nextBtn.classList.remove("hidden");
 }
 
-// Reveal the meaning of every multiple-choice option, inline inside its own
-// answer box, so the learner can study all four words at once. Un-dims the
-// non-selected options so every translation stays readable.
 function showTranslations() {
   const q = round.questions[round.index];
   [...$("options").querySelectorAll(".option")].forEach((btn) => {
@@ -365,12 +420,73 @@ function showTranslations() {
 }
 
 function nextQuestion() {
+  if (round.mode === "placement") {
+    if (round.index + 1 < round.size) {
+      round.index++;
+      round.questions.push(placementQuestion(round.levelIdx));
+      renderQuestion();
+    } else {
+      finishPlacement();
+    }
+    return;
+  }
   round.index++;
   if (round.index < round.questions.length) {
     renderQuestion();
   } else {
     finishRound();
   }
+}
+
+// ── Placement test ──
+function placementQuestion(levelIdx) {
+  const level = LEVELS[levelIdx];
+  const pool = VOCAB_BY_LEVEL[level];
+  const entry = pool[Math.floor(Math.random() * pool.length)];
+  const q = makeQuestion(entry, Math.random() < 0.5 ? "nl-en" : "en-nl", pool, level);
+  q.levelIdx = levelIdx;
+  return q;
+}
+
+function startPlacement() {
+  round = {
+    mode: "placement",
+    size: PLACEMENT_SIZE,
+    index: 0,
+    score: 0,
+    mistakes: [],
+    levelIdx: PLACEMENT_START_IDX,
+    results: [],
+    questions: [],
+  };
+  round.questions.push(placementQuestion(round.levelIdx));
+  show("quiz");
+  renderQuestion();
+}
+
+function finishPlacement() {
+  const idxs = round.results.map((r) => r.levelIdx);
+  const tail = idxs.slice(Math.floor(idxs.length / 3)); // drop burn-in
+  const meanIdx = tail.reduce((a, b) => a + b, 0) / (tail.length || 1);
+  const ability = clamp(1 + meanIdx, 1, 5);
+  profile = { name: profile.name, study: "adaptive", ability };
+  saveProfile(profile);
+  showPlacementResult(ability);
+}
+
+function showPlacementResult(ability) {
+  const mix = abilityMix(ability);
+  $("result-emoji").textContent = "📈";
+  $("result-title").textContent = `You're mostly ${nearestLevel(ability)}`;
+  $("result-score").parentElement.style.display = "none";
+  $("result-total").textContent = "";
+  $("result-detail").innerHTML = "Your mix: " + mix.map((m) => `${m.level} ${m.pct}%`).join(" · ");
+  $("review").innerHTML = "";
+  $("btn-again").style.display = "none";
+  $("btn-result-scores").style.display = "none";
+  $("btn-result-home").textContent = "Start studying";
+  applyProfile();
+  show("result");
 }
 
 // ── Results & scores (per user) ──
@@ -382,11 +498,9 @@ function loadScores() {
     return [];
   }
 }
-
 function saveScores(scores) {
   localStorage.setItem(scoresKey(), JSON.stringify(scores));
 }
-
 function recordScore(score, mode, level) {
   const scores = loadScores();
   const prevBest = scores.length ? Math.max(...scores.map((s) => s.score)) : -1;
@@ -405,12 +519,27 @@ function formatDate(iso) {
 function finishRound() {
   const { score, mode, mistakes, questions } = round;
   const total = questions.length;
-  // Best-scores table is for the standard 20-question rounds only; the
-  // variable-length mistakes round is about clearing words, not high scores.
-  const isNewBest = mode === "mistakes" ? false : recordScore(score, mode, profile.level);
-  const pct = total ? Math.round((score / total) * 100) : 0;
-  const remaining = loadMistakes().length;
 
+  // Reset any result-screen tweaks left over from the placement result.
+  $("result-score").parentElement.style.display = "";
+  $("btn-result-scores").style.display = "";
+  $("btn-result-home").textContent = "Home";
+
+  const isNewBest = mode === "mistakes" ? false : recordScore(score, mode, studyLabel());
+  const pct = total ? Math.round((score / total) * 100) : 0;
+
+  // Per-round adaptive difficulty adjustment.
+  let driftNote = "";
+  if (mode !== "mistakes" && isAdaptive()) {
+    const before = profile.ability;
+    const delta = clamp((score / total - ADAPT_TARGET) * ADAPT_K, -ADAPT_MAX, ADAPT_MAX);
+    profile.ability = clamp(before + delta, 1, 5);
+    saveProfile(profile);
+    const d = profile.ability - before;
+    driftNote = d > 0.03 ? " · difficulty ↑" : d < -0.03 ? " · difficulty ↓" : "";
+  }
+
+  const remaining = loadMistakes().length;
   let emoji, title;
   if (mode === "mistakes" && remaining === 0) {
     emoji = "🎉"; title = "All caught up!";
@@ -431,14 +560,15 @@ function finishRound() {
   $("result-score").textContent = score;
   $("result-total").textContent = `/${total}`;
 
-  const modeLabel = mode === "mistakes" ? MODES[mode] : `${profile.level} · ${MODES[mode]}`;
+  const modeLabel = mode === "mistakes" ? MODES[mode] : `${studyLabel()} · ${MODES[mode]}`;
   let detail = `${pct}% · ${modeLabel}`;
   if (mode === "mistakes") {
     detail += remaining === 0
       ? ' · <span class="new-best">no mistakes left!</span>'
       : ` · ${remaining} word${remaining === 1 ? "" : "s"} still to review`;
-  } else if (isNewBest) {
-    detail += ' · <span class="new-best">New best score!</span>';
+  } else {
+    if (isNewBest) detail += ' · <span class="new-best">New best score!</span>';
+    detail += driftNote;
   }
   $("result-detail").innerHTML = detail;
 
@@ -468,7 +598,6 @@ function finishRound() {
     });
   }
 
-  // "Play again" has nothing to repeat if the mistakes bank is now empty.
   const again = $("btn-again");
   if (mode === "mistakes" && remaining === 0) {
     again.style.display = "none";
@@ -478,8 +607,7 @@ function finishRound() {
   }
 
   show("result");
-  renderHomeBest();
-  renderHomeMistakes();
+  applyProfile();
 }
 
 function renderScoresTable() {
@@ -538,12 +666,19 @@ function renderHomeMistakes() {
   }
 }
 
-// Update everything that reflects the current profile (called after login /
-// switching user / changing level).
 function applyProfile() {
   $("profile-name").textContent = profile.name;
-  $("profile-level").textContent = `${profile.level} · ${LEVEL_INFO[profile.level]}`;
-  $("word-count").textContent = `${currentVocab().length} words · ${profile.level} · offline · v${APP_VERSION}`;
+  if (isAdaptive()) {
+    $("profile-level").textContent = "Adaptive";
+    const mix = abilityMix(profile.ability);
+    $("mix-line").textContent = "Your mix: " + mix.map((m) => `${m.level} ${m.pct}%`).join(" · ");
+    $("mix-line").classList.remove("gone");
+    $("word-count").textContent = `Adaptive · ${allVocab().length} words · offline · v${APP_VERSION}`;
+  } else {
+    $("profile-level").textContent = `${profile.study} · ${LEVEL_INFO[profile.study]}`;
+    $("mix-line").classList.add("gone");
+    $("word-count").textContent = `${VOCAB_BY_LEVEL[profile.study].length} words · ${profile.study} · offline · v${APP_VERSION}`;
+  }
   renderHomeBest();
   renderHomeMistakes();
 }
@@ -555,45 +690,76 @@ function openScores(from) {
 }
 
 // ── Registration screen ──
-function renderLevelChoices() {
+function studyChoices() {
+  return [{ key: "adaptive", code: "📈", desc: "Adaptive — adjusts to you", adaptive: true }]
+    .concat(LEVELS.map((l) => ({ key: l, code: l, desc: LEVEL_INFO[l] })));
+}
+
+function renderStudyChoices() {
   const box = $("level-choices");
   box.innerHTML = "";
-  LEVELS.forEach((lvl) => {
+  studyChoices().forEach((c) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "level-chip" + (lvl === regLevel ? " selected" : "");
-    btn.innerHTML = `<span class="level-code">${lvl}</span><span class="level-desc">${LEVEL_INFO[lvl]}</span>`;
+    btn.className = "level-chip" + (c.adaptive ? " adaptive" : "") + (c.key === regChoice ? " selected" : "");
+    btn.innerHTML = `<span class="level-code">${c.code}</span><span class="level-desc">${c.desc}</span>`;
     btn.addEventListener("click", () => {
-      regLevel = lvl;
-      renderLevelChoices();
+      regChoice = c.key;
+      renderStudyChoices();
+      updateRegisterButtons();
       updateRegisterState();
     });
     box.appendChild(btn);
   });
 }
 
+function updateRegisterButtons() {
+  const adaptive = regChoice === "adaptive";
+  $("btn-skip-test").style.display = adaptive ? "" : "none";
+  $("btn-register").textContent = adaptive
+    ? "Take placement test"
+    : (regEditing ? "Save" : "Start learning");
+}
+
 function updateRegisterState() {
   const name = $("reg-name").value.trim();
-  $("btn-register").disabled = !(name && regLevel);
+  $("btn-register").disabled = !(name && regChoice);
 }
 
 function showRegister() {
-  const editing = !!profile;
-  $("reg-title").textContent = editing ? "Change user or level" : "Welcome!";
-  $("reg-name").value = editing ? profile.name : "";
-  regLevel = editing ? profile.level : null;
-  $("btn-register").textContent = editing ? "Save" : "Start learning";
-  $("btn-register-cancel").style.display = editing ? "" : "none";
-  renderLevelChoices();
+  regEditing = !!profile;
+  $("reg-title").textContent = regEditing ? "Change user or level" : "Welcome!";
+  $("reg-name").value = regEditing ? profile.name : "";
+  regChoice = regEditing ? profile.study : null;
+  $("btn-register-cancel").style.display = regEditing ? "" : "none";
+  renderStudyChoices();
+  updateRegisterButtons();
   updateRegisterState();
   show("register");
-  if (!editing) setTimeout(() => $("reg-name").focus(), 50);
+  if (!regEditing) setTimeout(() => $("reg-name").focus(), 50);
 }
 
 function submitRegister() {
   const name = $("reg-name").value.trim();
-  if (!name || !regLevel) return;
-  profile = { name, level: regLevel };
+  if (!name || !regChoice) return;
+  const keepAbility = profile && typeof profile.ability === "number" ? profile.ability : START_ABILITY;
+  if (regChoice === "adaptive") {
+    profile = { name, study: "adaptive", ability: keepAbility };
+    saveProfile(profile);
+    startPlacement();
+  } else {
+    profile = { name, study: regChoice, ability: keepAbility };
+    saveProfile(profile);
+    applyProfile();
+    show("home");
+  }
+}
+
+function skipTest() {
+  const name = $("reg-name").value.trim();
+  if (!name) return;
+  const keepAbility = profile && typeof profile.ability === "number" ? profile.ability : START_ABILITY;
+  profile = { name, study: "adaptive", ability: keepAbility };
   saveProfile(profile);
   applyProfile();
   show("home");
@@ -632,6 +798,7 @@ $("btn-scores-back").addEventListener("click", () => show(scoresBackTarget));
 
 $("btn-change-profile").addEventListener("click", showRegister);
 $("btn-register").addEventListener("click", submitRegister);
+$("btn-skip-test").addEventListener("click", skipTest);
 $("btn-register-cancel").addEventListener("click", () => show("home"));
 $("reg-name").addEventListener("input", updateRegisterState);
 $("reg-name").addEventListener("keydown", (e) => {
@@ -645,7 +812,6 @@ $("btn-clear-scores").addEventListener("click", () => {
     renderHomeBest();
   }
 });
-
 $("btn-clear-mistakes").addEventListener("click", () => {
   if (confirm("Delete all saved mistakes for " + profile.name + "?")) {
     localStorage.removeItem(mistakesKey());

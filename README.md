@@ -5,7 +5,8 @@ An offline mobile quiz app for practising Dutch↔English vocabulary across CEFR
 ## Features
 
 - **CEFR levels A1, A2, B1, B2, C1** — ~2,600 words total (A1 479, A2 354, B1 635, B2 710, C1 483): nouns with de/het article, verbs, adjectives, adverbs and connectors; each round draws only from your chosen level
-- **User profiles** — register a name and level on the landing page; each user keeps their **own** best scores and mistakes. Switch user or level any time from the home screen's **Change** button
+- **Adaptive difficulty** — instead of a fixed level, take a short **placement test** (12 adaptive questions) and study a personalised **mix** of levels (e.g. *A2 22% · B1 49% · B2 29%*). Your ability drifts up or down after each round based on your score. A fixed single level is still available for focused drilling
+- **User profiles** — register a name and study mode on the landing page; each user keeps their **own** best scores and mistakes. Switch user, level, or retake the placement test any time from the home screen's **Change** button
 - **Three modes** — Nederlands → English, English → Nederlands, or mixed
 - **🎯 Practice mistakes** — drill only the words you've missed (per level)
 - **20 multiple-choice questions per round**, 4 options each, with instant feedback

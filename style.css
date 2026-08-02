@@ -96,6 +96,8 @@ body {
 }
 .level-chip:active { transform: scale(0.98); }
 .level-chip.selected { border-color: var(--accent); background: var(--correct-bg); }
+.level-chip.adaptive { border-style: dashed; }
+.level-chip.adaptive.selected { border-style: solid; }
 .level-code { font-weight: 800; font-size: 17px; min-width: 34px; }
 .level-desc { color: var(--muted); }
 .level-chip.selected .level-desc { color: var(--text); }
@@ -139,6 +141,13 @@ body {
 .btn-change:active { transform: scale(0.97); }
 .home-title { text-align: center; }
 .home-title h1 { font-size: 26px; letter-spacing: -0.5px; }
+.mix-line {
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--accent);
+  font-weight: 600;
+  margin-top: -8px;
+}
 
 /* ── Home ── */
 .hero { text-align: center; padding: 18px 0 4px; }

@@ -28,10 +28,11 @@
       <input id="reg-name" class="reg-input" type="text" autocomplete="off"
              autocapitalize="words" maxlength="24" placeholder="e.g. Anna" />
 
-      <p class="reg-label">Choose your level</p>
+      <p class="reg-label">How do you want to study?</p>
       <div class="level-choices" id="level-choices"></div>
 
       <button class="btn btn-primary btn-register" id="btn-register" disabled>Start learning</button>
+      <button class="btn btn-ghost" id="btn-skip-test" style="display:none">Skip test — start balanced</button>
       <button class="btn btn-ghost" id="btn-register-cancel" style="display:none">Cancel</button>
     </section>
   </main>
@@ -50,6 +51,7 @@
     </header>
 
     <div class="home-title"><h1>Dutch Vocab</h1><p class="subtitle">20 questions per round</p></div>
+    <p class="mix-line gone" id="mix-line"></p>
 
     <section class="mode-buttons">
       <button class="btn btn-primary" data-mode="nl-en">
