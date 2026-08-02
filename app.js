@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.2.1";
+const APP_VERSION = "1.2.2";
 const ROUND_LENGTH = 20;
 const OPTION_COUNT = 4;
 const MAX_SCORES = 10;
