@@ -1,16 +1,18 @@
-# Dutch Vocab B1–B2 📱
+# Dutch Vocab A1–C1 📱
 
-An offline mobile quiz app for practising Dutch↔English vocabulary at B1–B2 level.
+An offline mobile quiz app for practising Dutch↔English vocabulary across CEFR levels A1–C1.
 
 ## Features
 
-- **520 curated B1–B2 words** — nouns (with de/het article), verbs, adjectives, adverbs and connectors
+- **CEFR levels A1, A2, B1, B2, C1** — ~2,600 words total (A1 479, A2 354, B1 635, B2 710, C1 483): nouns with de/het article, verbs, adjectives, adverbs and connectors; each round draws only from your chosen level
+- **User profiles** — register a name and level on the landing page; each user keeps their **own** best scores and mistakes. Switch user or level any time from the home screen's **Change** button
 - **Three modes** — Nederlands → English, English → Nederlands, or mixed
+- **🎯 Practice mistakes** — drill only the words you've missed (per level)
 - **20 multiple-choice questions per round**, 4 options each, with instant feedback
+- **"I don't know"** to skip without guessing, and **Show all translations** to reveal every option's meaning inline
 - **Smart distractors** — wrong options match the word class of the answer and never overlap in meaning with the correct one
-- **Mistake review** at the end of each round
-- **Best-score table (top 10) with dates**, stored on your device
-- **Works fully offline** — it's a PWA: after the first visit everything is cached, no connection needed
+- **Best-score table (top 10) with dates and level**, stored on your device
+- **Works fully offline** — it's a PWA with a network-first service worker: always up to date online, fully usable offline
 - Light & dark mode, installable to your home screen
 
 ## How to use it on your phone

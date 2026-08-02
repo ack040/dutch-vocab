@@ -1,11 +1,10 @@
 "use strict";
 
-const APP_VERSION = "1.2.2";
+const APP_VERSION = "1.4.0";
 const ROUND_LENGTH = 20;
 const OPTION_COUNT = 4;
 const MAX_SCORES = 10;
-const STORAGE_KEY = "dutch-vocab-scores-v1";
-const MISTAKES_KEY = "dutch-vocab-mistakes-v1";
+const PROFILE_KEY = "dutch-vocab-profile";
 
 const MODES = {
   "nl-en": "NL → EN",
@@ -16,10 +15,13 @@ const MODES = {
 
 // ── State ──
 let round = null; // { mode, questions, index, score, mistakes }
+let profile = null; // { name, level }
+let regLevel = null; // level chosen on the registration screen
 
 // ── Elements ──
 const $ = (id) => document.getElementById(id);
 const screens = {
+  register: $("screen-register"),
   home: $("screen-home"),
   quiz: $("screen-quiz"),
   result: $("screen-result"),
@@ -67,12 +69,40 @@ function wordClass(entry) {
   return "other";
 }
 
-// ── Mistakes bank (persistent record of missed words) ──
-// Each item: { nl, en, dir, count, last } keyed by nl + direction, so a
-// word missed reading Dutch and missed recalling Dutch are tracked apart.
+// ── Profiles (username + level) ──
+function loadProfile() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PROFILE_KEY));
+    if (raw && raw.name && LEVELS.includes(raw.level)) return raw;
+  } catch {}
+  return null;
+}
+
+function saveProfile(p) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+}
+
+function levelVocab(level) {
+  return VOCAB_BY_LEVEL[level] || [];
+}
+
+function currentVocab() {
+  return levelVocab(profile.level);
+}
+
+// Per-user storage keys, so each username keeps its own scores/mistakes.
+function scoresKey() {
+  return "dutch-vocab-scores::" + profile.name;
+}
+function mistakesKey() {
+  return "dutch-vocab-mistakes::" + profile.name;
+}
+
+// ── Mistakes bank (per user, persistent record of missed words) ──
+// Each item: { nl, en, dir, level, count, last }, keyed by nl+dir+level.
 function loadMistakes() {
   try {
-    const raw = JSON.parse(localStorage.getItem(MISTAKES_KEY));
+    const raw = JSON.parse(localStorage.getItem(mistakesKey()));
     return Array.isArray(raw) ? raw : [];
   } catch {
     return [];
@@ -80,34 +110,36 @@ function loadMistakes() {
 }
 
 function saveMistakes(list) {
-  localStorage.setItem(MISTAKES_KEY, JSON.stringify(list));
+  localStorage.setItem(mistakesKey(), JSON.stringify(list));
 }
 
-function mistakeKey(nl, dir) {
-  return nl + "|" + dir;
+function mistakeKey(nl, dir, level) {
+  return nl + "|" + dir + "|" + level;
 }
 
 function recordMistake(q) {
   const list = loadMistakes();
-  const key = mistakeKey(q.nl, q.dir);
-  const existing = list.find((x) => mistakeKey(x.nl, x.dir) === key);
+  const key = mistakeKey(q.nl, q.dir, q.level);
+  const existing = list.find((x) => mistakeKey(x.nl, x.dir, x.level) === key);
   const now = new Date().toISOString();
   if (existing) {
     existing.count++;
     existing.last = now;
   } else {
-    list.push({ nl: q.nl, en: q.en, dir: q.dir, count: 1, last: now });
+    list.push({ nl: q.nl, en: q.en, dir: q.dir, level: q.level, count: 1, last: now });
   }
   saveMistakes(list);
 }
 
 function masterMistake(q) {
-  const key = mistakeKey(q.nl, q.dir);
-  saveMistakes(loadMistakes().filter((x) => mistakeKey(x.nl, x.dir) !== key));
+  const key = mistakeKey(q.nl, q.dir, q.level);
+  saveMistakes(loadMistakes().filter((x) => mistakeKey(x.nl, x.dir, x.level) !== key));
 }
 
 // ── Round building ──
-function makeQuestion(entry, dir) {
+// pool: the vocabulary list distractors are drawn from; level: tag stored on
+// the question so a missed word remembers which level it belongs to.
+function makeQuestion(entry, dir, pool, level) {
   const promptKey = dir === "nl-en" ? "nl" : "en";
   const answerKey = dir === "nl-en" ? "en" : "nl";
   const answer = entry[answerKey];
@@ -115,10 +147,10 @@ function makeQuestion(entry, dir) {
   // Prefer distractors of the same word class (noun/verb/other); if a
   // pass can't fill all slots, retry without the class restriction.
   const cls = wordClass(entry);
-  const pool = shuffle(VOCAB);
+  const shuffled = shuffle(pool);
   const distractors = []; // { val, other } — val in answer language, other its translation
   for (const sameClassOnly of [true, false]) {
-    for (const cand of pool) {
+    for (const cand of shuffled) {
       if (distractors.length >= OPTION_COUNT - 1) break;
       if (cand.nl === entry.nl) continue;
       if (sameClassOnly && wordClass(cand) !== cls) continue;
@@ -139,6 +171,7 @@ function makeQuestion(entry, dir) {
     dir,
     nl: entry.nl,
     en: entry.en,
+    level,
     prompt: entry[promptKey],
     answer,
     options: shuffle([answer, ...distractors.map((d) => d.val)]),
@@ -150,17 +183,20 @@ function buildRound(mode) {
   let questions;
   if (mode === "mistakes") {
     // Most-missed first, then most recent; replay the exact direction missed.
+    // Distractors come from the level the missed word belongs to.
     const bank = loadMistakes()
       .slice()
       .sort((a, b) => b.count - a.count || new Date(b.last) - new Date(a.last));
-    questions = bank
-      .slice(0, ROUND_LENGTH)
-      .map((m) => makeQuestion({ nl: m.nl, en: m.en }, m.dir));
+    questions = bank.slice(0, ROUND_LENGTH).map((m) => {
+      const pool = levelVocab(m.level).length ? levelVocab(m.level) : currentVocab();
+      return makeQuestion({ nl: m.nl, en: m.en }, m.dir, pool, m.level);
+    });
   } else {
-    const picked = shuffle(VOCAB).slice(0, ROUND_LENGTH);
+    const pool = currentVocab();
+    const picked = shuffle(pool).slice(0, ROUND_LENGTH);
     questions = picked.map((entry) => {
       const dir = mode === "mixed" ? (Math.random() < 0.5 ? "nl-en" : "en-nl") : mode;
-      return makeQuestion(entry, dir);
+      return makeQuestion(entry, dir, pool, profile.level);
     });
   }
   return { mode, questions, index: 0, score: 0, mistakes: [] };
@@ -272,10 +308,10 @@ function nextQuestion() {
   }
 }
 
-// ── Results & scores ──
+// ── Results & scores (per user) ──
 function loadScores() {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    const raw = JSON.parse(localStorage.getItem(scoresKey()));
     return Array.isArray(raw) ? raw : [];
   } catch {
     return [];
@@ -283,13 +319,13 @@ function loadScores() {
 }
 
 function saveScores(scores) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(scores));
+  localStorage.setItem(scoresKey(), JSON.stringify(scores));
 }
 
-function recordScore(score, mode) {
+function recordScore(score, mode, level) {
   const scores = loadScores();
   const prevBest = scores.length ? Math.max(...scores.map((s) => s.score)) : -1;
-  scores.push({ score, mode, date: new Date().toISOString() });
+  scores.push({ score, mode, level, date: new Date().toISOString() });
   scores.sort((a, b) => b.score - a.score || new Date(b.date) - new Date(a.date));
   saveScores(scores.slice(0, MAX_SCORES));
   return score > prevBest;
@@ -306,7 +342,7 @@ function finishRound() {
   const total = questions.length;
   // Best-scores table is for the standard 20-question rounds only; the
   // variable-length mistakes round is about clearing words, not high scores.
-  const isNewBest = mode === "mistakes" ? false : recordScore(score, mode);
+  const isNewBest = mode === "mistakes" ? false : recordScore(score, mode, profile.level);
   const pct = total ? Math.round((score / total) * 100) : 0;
   const remaining = loadMistakes().length;
 
@@ -330,7 +366,8 @@ function finishRound() {
   $("result-score").textContent = score;
   $("result-total").textContent = `/${total}`;
 
-  let detail = `${pct}% · ${MODES[mode]}`;
+  const modeLabel = mode === "mistakes" ? MODES[mode] : `${profile.level} · ${MODES[mode]}`;
+  let detail = `${pct}% · ${modeLabel}`;
   if (mode === "mistakes") {
     detail += remaining === 0
       ? ' · <span class="new-best">no mistakes left!</span>'
@@ -401,10 +438,11 @@ function renderScoresTable() {
   scores.forEach((s, i) => {
     const row = document.createElement("div");
     row.className = "score-row" + (i === 0 ? " top" : "");
+    const meta = (s.level ? s.level + " · " : "") + (MODES[s.mode] || s.mode);
     row.innerHTML =
       `<span class="score-rank">${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</span>` +
       `<span class="score-val">${s.score}/20</span>` +
-      `<span class="score-meta">${MODES[s.mode] || s.mode}<br>${formatDate(s.date)}</span>`;
+      `<span class="score-meta">${meta}<br>${formatDate(s.date)}</span>`;
     table.appendChild(row);
   });
   box.appendChild(table);
@@ -418,7 +456,8 @@ function renderHomeBest() {
     return;
   }
   const best = scores[0];
-  box.innerHTML = `Best score: <strong>${best.score}/20</strong> &middot; ${MODES[best.mode] || best.mode} &middot; ${formatDate(best.date)}`;
+  const meta = (best.level ? best.level + " · " : "") + (MODES[best.mode] || best.mode);
+  box.innerHTML = `Best score: <strong>${best.score}/20</strong> &middot; ${meta} &middot; ${formatDate(best.date)}`;
 }
 
 function renderHomeMistakes() {
@@ -434,10 +473,65 @@ function renderHomeMistakes() {
   }
 }
 
+// Update everything that reflects the current profile (called after login /
+// switching user / changing level).
+function applyProfile() {
+  $("profile-name").textContent = profile.name;
+  $("profile-level").textContent = `${profile.level} · ${LEVEL_INFO[profile.level]}`;
+  $("word-count").textContent = `${currentVocab().length} words · ${profile.level} · offline · v${APP_VERSION}`;
+  renderHomeBest();
+  renderHomeMistakes();
+}
+
 function openScores(from) {
   scoresBackTarget = from;
   renderScoresTable();
   show("scores");
+}
+
+// ── Registration screen ──
+function renderLevelChoices() {
+  const box = $("level-choices");
+  box.innerHTML = "";
+  LEVELS.forEach((lvl) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "level-chip" + (lvl === regLevel ? " selected" : "");
+    btn.innerHTML = `<span class="level-code">${lvl}</span><span class="level-desc">${LEVEL_INFO[lvl]}</span>`;
+    btn.addEventListener("click", () => {
+      regLevel = lvl;
+      renderLevelChoices();
+      updateRegisterState();
+    });
+    box.appendChild(btn);
+  });
+}
+
+function updateRegisterState() {
+  const name = $("reg-name").value.trim();
+  $("btn-register").disabled = !(name && regLevel);
+}
+
+function showRegister() {
+  const editing = !!profile;
+  $("reg-title").textContent = editing ? "Change user or level" : "Welcome!";
+  $("reg-name").value = editing ? profile.name : "";
+  regLevel = editing ? profile.level : null;
+  $("btn-register").textContent = editing ? "Save" : "Start learning";
+  $("btn-register-cancel").style.display = editing ? "" : "none";
+  renderLevelChoices();
+  updateRegisterState();
+  show("register");
+  if (!editing) setTimeout(() => $("reg-name").focus(), 50);
+}
+
+function submitRegister() {
+  const name = $("reg-name").value.trim();
+  if (!name || !regLevel) return;
+  profile = { name, level: regLevel };
+  saveProfile(profile);
+  applyProfile();
+  show("home");
 }
 
 // ── Wiring ──
@@ -471,23 +565,35 @@ $("btn-scores").addEventListener("click", () => openScores("home"));
 $("btn-result-scores").addEventListener("click", () => openScores("result"));
 $("btn-scores-back").addEventListener("click", () => show(scoresBackTarget));
 
+$("btn-change-profile").addEventListener("click", showRegister);
+$("btn-register").addEventListener("click", submitRegister);
+$("btn-register-cancel").addEventListener("click", () => show("home"));
+$("reg-name").addEventListener("input", updateRegisterState);
+$("reg-name").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !$("btn-register").disabled) submitRegister();
+});
+
 $("btn-clear-scores").addEventListener("click", () => {
-  if (confirm("Delete all saved scores?")) {
-    localStorage.removeItem(STORAGE_KEY);
+  if (confirm("Delete all saved scores for " + profile.name + "?")) {
+    localStorage.removeItem(scoresKey());
     renderScoresTable();
     renderHomeBest();
   }
 });
 
 $("btn-clear-mistakes").addEventListener("click", () => {
-  if (confirm("Delete all saved mistakes?")) {
-    localStorage.removeItem(MISTAKES_KEY);
+  if (confirm("Delete all saved mistakes for " + profile.name + "?")) {
+    localStorage.removeItem(mistakesKey());
     renderScoresTable();
     renderHomeMistakes();
   }
 });
 
 // ── Init ──
-$("word-count").textContent = `${VOCAB.length} words · offline · v${APP_VERSION}`;
-renderHomeBest();
-renderHomeMistakes();
+profile = loadProfile();
+if (profile) {
+  applyProfile();
+  show("home");
+} else {
+  showRegister();
+}

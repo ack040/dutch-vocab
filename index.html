@@ -15,13 +15,41 @@
 </head>
 <body>
 
-  <!-- Home screen -->
-  <main id="screen-home" class="screen active">
+  <!-- Registration / landing screen -->
+  <main id="screen-register" class="screen active">
     <header class="hero">
       <div class="flag"><span></span><span></span><span></span></div>
       <h1>Dutch Vocab</h1>
-      <p class="subtitle">B1–B2 &middot; 20 questions per round</p>
+      <p class="subtitle" id="reg-title">Welcome!</p>
     </header>
+
+    <section class="register-form">
+      <label class="reg-label" for="reg-name">Your name</label>
+      <input id="reg-name" class="reg-input" type="text" autocomplete="off"
+             autocapitalize="words" maxlength="24" placeholder="e.g. Anna" />
+
+      <p class="reg-label">Choose your level</p>
+      <div class="level-choices" id="level-choices"></div>
+
+      <button class="btn btn-primary btn-register" id="btn-register" disabled>Start learning</button>
+      <button class="btn btn-ghost" id="btn-register-cancel" style="display:none">Cancel</button>
+    </section>
+  </main>
+
+  <!-- Home screen -->
+  <main id="screen-home" class="screen">
+    <header class="home-topbar">
+      <div class="profile-chip">
+        <span class="profile-avatar">👤</span>
+        <span class="profile-text">
+          <span class="profile-name" id="profile-name"></span>
+          <span class="profile-level" id="profile-level"></span>
+        </span>
+      </div>
+      <button class="btn-change" id="btn-change-profile">Change</button>
+    </header>
+
+    <div class="home-title"><h1>Dutch Vocab</h1><p class="subtitle">20 questions per round</p></div>
 
     <section class="mode-buttons">
       <button class="btn btn-primary" data-mode="nl-en">
