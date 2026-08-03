@@ -1,7 +1,7 @@
 "use strict";
 
-const APP_VERSION = "1.8.0";
-const ROUND_LENGTH = 20;
+const APP_VERSION = "1.9.1";
+const ROUND_LENGTH = 10;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;
 const PROFILE_KEY = "dutch-vocab-profile";
@@ -532,7 +532,7 @@ function showPlacementResult(ability) {
   show("result");
 }
 
-// ── Round history (per user) — every 20-question round, in time order ──
+// ── Round history (per user) — every completed round, in time order ──
 function loadHistory() {
   try {
     const raw = JSON.parse(localStorage.getItem(scoresKey()));
@@ -675,10 +675,10 @@ function buildChartSVG(pts) {
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
 
-  const minT = pts[0].t;
-  const maxT = pts[pts.length - 1].t;
-  const spanT = maxT - minT;
-  const x = (t) => (spanT === 0 ? padL + plotW / 2 : padL + ((t - minT) / spanT) * plotW);
+  const n = pts.length;
+  // Even steps by round order: oldest on the left, newest on the right, so the
+  // line always marches rightward as more rounds are played.
+  const x = (i) => (n > 1 ? padL + (i / (n - 1)) * plotW : padL + plotW / 2);
   const y = (v) => padT + (1 - (v - 1) / 4) * plotH; // v in [1..5]
 
   let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Question difficulty over time">`;
@@ -688,22 +688,22 @@ function buildChartSVG(pts) {
     svg += `<line class="chart-grid" x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}"/>`;
     svg += `<text class="chart-axis-label" x="${padL - 5}" y="${(y(i + 1) + 3).toFixed(1)}" text-anchor="end">${lv}</text>`;
   });
-  if (pts.length > 1) {
-    const line = pts.map((p) => `${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
-    const area = `${padL},${y(1).toFixed(1)} ` + line + ` ${x(maxT).toFixed(1)},${y(1).toFixed(1)}`;
+  if (n > 1) {
+    const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+    const area = `${padL},${y(1).toFixed(1)} ` + line + ` ${x(n - 1).toFixed(1)},${y(1).toFixed(1)}`;
     svg += `<polygon class="chart-area" points="${area}"/>`;
     svg += `<polyline class="chart-line" points="${line}"/>`;
   }
-  pts.forEach((p) => {
-    svg += `<circle class="chart-dot" cx="${x(p.t).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="${pts.length > 40 ? 1.6 : 3}"/>`;
+  pts.forEach((p, i) => {
+    svg += `<circle class="chart-dot" cx="${x(i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="${n > 40 ? 1.6 : 3}"/>`;
   });
   const shortDate = (t) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
   const yLbl = H - 6;
-  if (spanT === 0) {
-    svg += `<text class="chart-axis-label" x="${(padL + plotW / 2).toFixed(1)}" y="${yLbl}" text-anchor="middle">${shortDate(minT)}</text>`;
+  if (n === 1) {
+    svg += `<text class="chart-axis-label" x="${(padL + plotW / 2).toFixed(1)}" y="${yLbl}" text-anchor="middle">${shortDate(pts[0].t)}</text>`;
   } else {
-    svg += `<text class="chart-axis-label" x="${padL}" y="${yLbl}" text-anchor="start">${shortDate(minT)}</text>`;
-    svg += `<text class="chart-axis-label" x="${W - padR}" y="${yLbl}" text-anchor="end">${shortDate(maxT)}</text>`;
+    svg += `<text class="chart-axis-label" x="${padL}" y="${yLbl}" text-anchor="start">${shortDate(pts[0].t)}</text>`;
+    svg += `<text class="chart-axis-label" x="${W - padR}" y="${yLbl}" text-anchor="end">${shortDate(pts[n - 1].t)}</text>`;
   }
   svg += `</svg>`;
   return svg;
@@ -727,7 +727,7 @@ function renderProgress() {
 
   const pts = difficultyPoints(history);
   if (!pts.length) {
-    chart.innerHTML = '<div class="scores-empty">No rounds yet.<br>Finish a 20-question round and your difficulty chart will appear here.</div>';
+    chart.innerHTML = '<div class="scores-empty">No rounds yet.<br>Finish a round and your difficulty chart will appear here.</div>';
     stats.textContent = "";
     $("btn-clear-scores").style.display = history.length ? "" : "none";
     return;
