@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.9.0";
+const APP_VERSION = "1.9.1";
 const ROUND_LENGTH = 10;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;

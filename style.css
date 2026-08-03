@@ -239,7 +239,32 @@ body {
 .home-best strong { color: var(--text); font-size: 18px; }
 .home-best:empty { display: none; }
 
-.word-count { text-align: center; color: var(--muted); font-size: 13px; margin-top: auto; }
+.studio-credit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+.studio-logo {
+  width: 132px;
+  height: auto;
+  display: block;
+  background: #f6f3ea; /* the logo's cream canvas — keeps the dark pebble legible in any theme */
+  border-radius: 14px;
+  padding: 10px 14px;
+  box-sizing: border-box;
+  box-shadow: var(--shadow);
+}
+.studio-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+  text-align: center;
+}
+.word-count { text-align: center; color: var(--muted); font-size: 12px; margin-top: 4px; }
 
 /* ── Quiz ── */
 .quiz-header { display: flex; align-items: center; gap: 12px; }
