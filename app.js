@@ -1,10 +1,11 @@
 "use strict";
 
-const APP_VERSION = "1.7.1";
+const APP_VERSION = "1.8.0";
 const ROUND_LENGTH = 20;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;
 const PROFILE_KEY = "dutch-vocab-profile";
+const USERS_KEY = "dutch-vocab-users";
 
 // Adaptive tuning
 const ABILITY_SIGMA = 0.85;   // spread of the level mix around the ability
@@ -137,6 +138,48 @@ function loadProfile() {
 
 function saveProfile(p) {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+  upsertUser(p);
+}
+
+// ── Registered users (so a returning user can be picked, not retyped) ──
+function loadUsers() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(USERS_KEY));
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+function saveUsers(list) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(list));
+}
+function upsertUser(p) {
+  const list = loadUsers();
+  const i = list.findIndex((u) => u.name === p.name);
+  const entry = { name: p.name, study: p.study, ability: p.ability };
+  if (i >= 0) list[i] = entry; else list.push(entry);
+  saveUsers(list);
+}
+// Discover any usernames that already have saved data but aren't in the
+// registry yet (e.g. from before this feature existed), so they still appear.
+function syncUsers() {
+  const byName = new Map(loadUsers().map((u) => [u.name, u]));
+  for (let i = 0; i < localStorage.length; i++) {
+    const m = /^dutch-vocab-(?:scores|mistakes)::(.+)$/.exec(localStorage.key(i));
+    if (m && !byName.has(m[1])) {
+      byName.set(m[1], { name: m[1], study: "adaptive", ability: START_ABILITY });
+    }
+  }
+  saveUsers([...byName.values()]);
+}
+function chooseUser(name) {
+  const u = loadUsers().find((x) => x.name === name);
+  if (!u) return;
+  const study = u.study === "adaptive" || LEVELS.includes(u.study) ? u.study : "adaptive";
+  profile = { name: u.name, study, ability: typeof u.ability === "number" ? u.ability : START_ABILITY };
+  saveProfile(profile);
+  applyProfile();
+  show("home");
 }
 
 function isAdaptive() {
@@ -786,12 +829,42 @@ function updateRegisterState() {
   $("btn-register").disabled = !(name && regChoice);
 }
 
+function renderUserList() {
+  const users = loadUsers().slice().sort((a, b) => a.name.localeCompare(b.name));
+  const btn = $("btn-show-users");
+  const list = $("user-list");
+  list.innerHTML = "";
+  if (!users.length) {
+    btn.style.display = "none";
+    list.classList.add("gone");
+    return;
+  }
+  btn.style.display = "";
+  btn.textContent = `👥 Registered users (${users.length})`;
+  users.forEach((u) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "user-chip";
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "user-chip-name";
+    nameSpan.textContent = u.name;
+    const subSpan = document.createElement("span");
+    subSpan.className = "user-chip-sub";
+    subSpan.textContent = u.study === "adaptive" ? "Adaptive" : u.study;
+    chip.append(nameSpan, subSpan);
+    chip.addEventListener("click", () => chooseUser(u.name));
+    list.appendChild(chip);
+  });
+}
+
 function showRegister() {
   regEditing = !!profile;
   $("reg-title").textContent = regEditing ? "Change user or level" : "Welcome!";
   $("reg-name").value = regEditing ? profile.name : "";
   regChoice = regEditing ? profile.study : null;
   $("btn-register-cancel").style.display = regEditing ? "" : "none";
+  renderUserList();
+  $("user-list").classList.add("gone"); // start collapsed
   renderStudyChoices();
   updateRegisterButtons();
   updateRegisterState();
@@ -859,6 +932,7 @@ $("btn-scores-back").addEventListener("click", () => show(scoresBackTarget));
 $("btn-change-profile").addEventListener("click", showRegister);
 $("btn-register").addEventListener("click", submitRegister);
 $("btn-skip-test").addEventListener("click", skipTest);
+$("btn-show-users").addEventListener("click", () => $("user-list").classList.toggle("gone"));
 $("btn-register-cancel").addEventListener("click", () => show("home"));
 $("reg-name").addEventListener("input", updateRegisterState);
 $("reg-name").addEventListener("keydown", (e) => {
@@ -881,8 +955,10 @@ $("btn-clear-mistakes").addEventListener("click", () => {
 });
 
 // ── Init ──
+syncUsers(); // surface any pre-existing usernames in the picker
 profile = loadProfile();
 if (profile) {
+  upsertUser(profile);
   applyProfile();
   show("home");
 } else {
