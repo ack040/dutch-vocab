@@ -59,6 +59,26 @@ body {
 
 /* ── Registration ── */
 .register-form { display: flex; flex-direction: column; gap: 10px; }
+.user-list { display: flex; flex-direction: column; gap: 8px; }
+.user-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.06s ease, border-color 0.15s;
+}
+.user-chip:active { transform: scale(0.98); }
+.user-chip-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-chip-sub { color: var(--muted); font-size: 13px; flex-shrink: 0; }
 .reg-label {
   font-size: 13px;
   font-weight: 700;
