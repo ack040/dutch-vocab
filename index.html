@@ -78,6 +78,7 @@
     <section class="home-best" id="home-best"></section>
 
     <button class="btn btn-ghost" id="btn-scores">📊 Progress</button>
+    <button class="btn btn-ghost" id="btn-options">⚙️ Options</button>
 
     <section class="studio-credit">
       <svg class="studio-logo" viewBox="0 0 974 390" role="img" aria-label="RockStonePebble Studios logo">
@@ -145,6 +146,24 @@
       <button class="btn btn-ghost btn-danger" id="btn-clear-mistakes">Clear saved mistakes</button>
       <button class="btn btn-ghost btn-danger" id="btn-clear-scores">Clear progress history</button>
     </div>
+  </main>
+
+  <!-- Options screen -->
+  <main id="screen-options" class="screen">
+    <header class="scores-header">
+      <button class="quit" id="btn-options-back" aria-label="Back">←</button>
+      <h2>⚙️ Options</h2>
+    </header>
+
+    <a class="opt-coffee" id="btn-coffee" target="_blank" rel="noopener">☕ Buy the developer a coffee</a>
+
+    <label class="opt-row">
+      <span class="opt-row-text">
+        <span class="opt-row-title">Hide look-alike words</span>
+        <span class="opt-row-desc">Skip Dutch words spelled almost the same as their English meaning — e.g. <em>museum</em>, <em>argument</em>, <em>organisatie</em> (<span id="opt-cognate-count">0</span> words). You can turn this back on any time; nothing is deleted.</span>
+      </span>
+      <input type="checkbox" id="opt-hide-cognates" class="opt-switch" aria-label="Hide look-alike words">
+    </label>
   </main>
 
   <script src="data.js"></script>
