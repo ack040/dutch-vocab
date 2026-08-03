@@ -413,6 +413,25 @@ body {
 .result-score { font-size: 52px; font-weight: 800; margin-top: 6px; color: var(--primary-light); }
 .result-total { font-size: 24px; color: var(--muted); font-weight: 600; }
 .result-detail { color: var(--muted); margin-top: 6px; font-size: 15px; }
+
+.adapt-explain {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 2px 16px;
+  font-size: 14px;
+}
+.adapt-explain summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 700;
+  color: var(--primary-light);
+  list-style: none;
+}
+.adapt-explain summary::-webkit-details-marker { display: none; }
+.adapt-explain[open] summary { border-bottom: 1px solid var(--border); }
+.adapt-explain p { margin: 10px 0; color: var(--text); line-height: 1.5; }
+.adapt-explain strong { color: var(--text); }
 .new-best { color: var(--accent); font-weight: 800; }
 
 .review { display: flex; flex-direction: column; gap: 8px; }

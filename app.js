@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.10.0";
+const APP_VERSION = "1.10.1";
 const ROUND_LENGTH = 10;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;
@@ -594,6 +594,7 @@ function showPlacementResult(ability) {
   $("btn-again").style.display = "none";
   $("btn-result-scores").style.display = "none";
   $("btn-result-home").textContent = "Start studying";
+  $("adapt-explain").classList.add("gone");
   applyProfile();
   show("result");
 }
@@ -652,12 +653,14 @@ function finishRound() {
 
   // Per-round adaptive difficulty adjustment.
   let driftNote = "";
+  let adaptBefore = null, adaptAfter = null;
   if (mode !== "mistakes" && isAdaptive()) {
-    const before = profile.ability;
+    adaptBefore = profile.ability;
     const delta = clamp((score / total - ADAPT_TARGET) * ADAPT_K, -ADAPT_MAX, ADAPT_MAX);
-    profile.ability = clamp(before + delta, 1, 5);
+    profile.ability = clamp(adaptBefore + delta, 1, 5);
     saveProfile(profile);
-    const d = profile.ability - before;
+    adaptAfter = profile.ability;
+    const d = adaptAfter - adaptBefore;
     driftNote = d > 0.03 ? " · difficulty ↑" : d < -0.03 ? " · difficulty ↓" : "";
   }
 
@@ -693,6 +696,22 @@ function finishRound() {
     detail += driftNote;
   }
   $("result-detail").innerHTML = detail;
+
+  // Adaptive explainer: how the score moved the level and what changes next.
+  const explain = $("adapt-explain");
+  if (adaptBefore != null) {
+    const mix = abilityMix(adaptAfter);
+    const moved = adaptAfter > adaptBefore ? "rose ↑" : adaptAfter < adaptBefore ? "eased down ↓" : "held steady";
+    const target = Math.round(ADAPT_TARGET * 100);
+    $("adapt-explain-body").innerHTML =
+      `<p>You scored <strong>${score}/${total}</strong> (${pct}%). Every round targets about <strong>${target}%</strong>: score above it and the difficulty rises, below it and it eases — the further from ${target}%, the bigger the step (up to ±0.4 per round).</p>` +
+      `<p>So your level <strong>${moved}</strong>: <strong>${adaptBefore.toFixed(1)} → ${adaptAfter.toFixed(1)}</strong> on a 1–5 scale (1 = A1 … 5 = C1).</p>` +
+      `<p>Your next quizzes will pull words from this mix: <strong>${mix.map((m) => `${m.level} ${m.pct}%`).join(" · ")}</strong>.</p>`;
+    explain.open = false;
+    explain.classList.remove("gone");
+  } else {
+    explain.classList.add("gone");
+  }
 
   const review = $("review");
   review.innerHTML = "";
