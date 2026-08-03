@@ -1,11 +1,13 @@
 "use strict";
 
-const APP_VERSION = "1.9.1";
+const APP_VERSION = "1.10.0";
 const ROUND_LENGTH = 10;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;
 const PROFILE_KEY = "dutch-vocab-profile";
 const USERS_KEY = "dutch-vocab-users";
+const SETTINGS_KEY = "dutch-vocab-settings";
+const COFFEE_URL = "https://buymeacoffee.com/rockstonepebble"; // placeholder — swap for the real link
 
 // Adaptive tuning
 const ABILITY_SIGMA = 0.85;   // spread of the level mix around the ability
@@ -37,6 +39,7 @@ const screens = {
   quiz: $("screen-quiz"),
   result: $("screen-result"),
   scores: $("screen-scores"),
+  options: $("screen-options"),
 };
 let scoresBackTarget = "home";
 
@@ -87,6 +90,69 @@ function levelVocab(level) {
 }
 function allVocab() {
   return LEVELS.flatMap((l) => VOCAB_BY_LEVEL[l]);
+}
+
+// ── Settings + "look-alike" (cognate) filter ──
+let settings = (() => {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch { return {}; }
+})();
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+function cnorm(s) {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]/g, "");
+}
+function ceng(s) {
+  return cnorm(s).replace(/ph/g, "f").replace(/c/g, "k").replace(/y/g, "i").replace(/qu/g, "kw").replace(/th/g, "t");
+}
+function editDist(a, b) {
+  const m = a.length, n = b.length;
+  const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[m][n];
+}
+// True when the Dutch word is essentially the same as EVERY English sense
+// (so words with an extra/different meaning are never treated as look-alikes).
+function isLookAlike(entry) {
+  const w = entry.nl.replace(/^(de|het|zich)\s+/, "").trim();
+  if (/\s/.test(w)) return false;
+  const ws = cnorm(w), wc = ceng(w);
+  const senses = entry.en.replace(/\([^)]*\)/g, "").split(/[,;]/)
+    .map((s) => s.replace(/^(to|the|a|an)\s+/, "").trim()).filter(Boolean);
+  if (!senses.length) return false;
+  for (const s of senses) {
+    const sn = cnorm(s), scn = ceng(s);
+    const L = Math.min(editDist(ws, sn), editDist(wc, scn));
+    const maxlen = Math.max(ws.length, sn.length);
+    const ok = sn === ws || L === 0 || (L <= 1 && maxlen >= 4) || (L <= 2 && maxlen >= 6);
+    if (!ok) return false;
+  }
+  return true;
+}
+
+let _poolCache = null;
+let _lookAlikeCount = null;
+function invalidatePools() { _poolCache = null; }
+// The vocab pool for a level, minus look-alikes when the setting is on.
+function activePool(level) {
+  if (!settings.hideCognates) return VOCAB_BY_LEVEL[level];
+  if (!_poolCache) {
+    _poolCache = {};
+    for (const l of LEVELS) _poolCache[l] = VOCAB_BY_LEVEL[l].filter((e) => !isLookAlike(e));
+  }
+  return _poolCache[level];
+}
+function lookAlikeCount() {
+  if (_lookAlikeCount == null) {
+    _lookAlikeCount = LEVELS.reduce((n, l) => n + VOCAB_BY_LEVEL[l].filter(isLookAlike).length, 0);
+  }
+  return _lookAlikeCount;
+}
+function activeTotal() {
+  return LEVELS.reduce((n, l) => n + activePool(l).length, 0);
 }
 
 // ── Ability → level mix ──
@@ -295,7 +361,7 @@ function buildRound(mode) {
       .slice()
       .sort((a, b) => b.count - a.count || new Date(b.last) - new Date(a.last));
     questions = bank.slice(0, ROUND_LENGTH).map((m) => {
-      const pool = levelVocab(m.level).length ? levelVocab(m.level) : allVocab();
+      const pool = activePool(m.level).length ? activePool(m.level) : allVocab();
       return makeQuestion({ nl: m.nl, en: m.en }, m.dir, pool, m.level);
     });
   } else if (isAdaptive()) {
@@ -306,16 +372,16 @@ function buildRound(mode) {
       let entry, level, tries = 0;
       do {
         level = sampleLevel(profile.ability);
-        const pool = VOCAB_BY_LEVEL[level];
+        const pool = activePool(level);
         entry = pool[Math.floor(Math.random() * pool.length)];
         tries++;
       } while (used.has(entry.nl) && tries < 12);
       used.add(entry.nl);
-      questions.push(makeQuestion(entry, pickDir(mode), VOCAB_BY_LEVEL[level], level));
+      questions.push(makeQuestion(entry, pickDir(mode), activePool(level), level));
     }
   } else {
     const level = profile.study;
-    const pool = VOCAB_BY_LEVEL[level];
+    const pool = activePool(level);
     const picked = shuffle(pool).slice(0, ROUND_LENGTH);
     questions = picked.map((entry) => makeQuestion(entry, pickDir(mode), pool, level));
   }
@@ -484,7 +550,7 @@ function nextQuestion() {
 // ── Placement test ──
 function placementQuestion(levelIdx) {
   const level = LEVELS[levelIdx];
-  const pool = VOCAB_BY_LEVEL[level];
+  const pool = activePool(level);
   const entry = pool[Math.floor(Math.random() * pool.length)];
   const q = makeQuestion(entry, Math.random() < 0.5 ? "nl-en" : "en-nl", pool, level);
   q.levelIdx = levelIdx;
@@ -776,11 +842,11 @@ function applyProfile() {
     const mix = abilityMix(profile.ability);
     $("mix-line").textContent = "Your mix: " + mix.map((m) => `${m.level} ${m.pct}%`).join(" · ");
     $("mix-line").classList.remove("gone");
-    $("word-count").textContent = `Adaptive · ${allVocab().length} words · offline · v${APP_VERSION}`;
+    $("word-count").textContent = `Adaptive · ${activeTotal()} words · offline · v${APP_VERSION}`;
   } else {
     $("profile-level").textContent = `${profile.study} · ${LEVEL_INFO[profile.study]}`;
     $("mix-line").classList.add("gone");
-    $("word-count").textContent = `${VOCAB_BY_LEVEL[profile.study].length} words · ${profile.study} · offline · v${APP_VERSION}`;
+    $("word-count").textContent = `${activePool(profile.study).length} words · ${profile.study} · offline · v${APP_VERSION}`;
   }
   renderHomeStats();
   renderHomeMistakes();
@@ -790,6 +856,12 @@ function openScores(from) {
   scoresBackTarget = from;
   renderProgress();
   show("scores");
+}
+
+function openOptions() {
+  $("opt-hide-cognates").checked = !!settings.hideCognates;
+  $("opt-cognate-count").textContent = lookAlikeCount();
+  show("options");
 }
 
 // ── Registration screen ──
@@ -926,6 +998,15 @@ $("btn-again").addEventListener("click", () => {
 });
 $("btn-result-home").addEventListener("click", () => show("home"));
 $("btn-scores").addEventListener("click", () => openScores("home"));
+$("btn-options").addEventListener("click", openOptions);
+$("btn-options-back").addEventListener("click", () => show("home"));
+$("btn-coffee").setAttribute("href", COFFEE_URL);
+$("opt-hide-cognates").addEventListener("change", (e) => {
+  settings.hideCognates = e.target.checked;
+  saveSettings();
+  invalidatePools();
+  if (profile) applyProfile();
+});
 $("btn-result-scores").addEventListener("click", () => openScores("result"));
 $("btn-scores-back").addEventListener("click", () => show(scoresBackTarget));
 
