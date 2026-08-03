@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.7.0";
+const APP_VERSION = "1.7.1";
 const ROUND_LENGTH = 20;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;
@@ -501,12 +501,23 @@ function loadHistory() {
 function saveHistory(list) {
   localStorage.setItem(scoresKey(), JSON.stringify(list));
 }
-function recordHistory(score, mode, level) {
+function recordHistory(score, mode, level, diff) {
   const list = loadHistory();
   const prevBest = list.length ? Math.max(...list.map((s) => s.score)) : -1;
-  list.push({ score, mode, level, date: new Date().toISOString() });
+  list.push({ score, mode, level, diff, date: new Date().toISOString() });
   saveHistory(list.slice(-HISTORY_MAX));
   return list.length > 1 && score > prevBest; // a genuine improvement, not the first round
+}
+
+// The A1–C1 difficulty (1–5) a history entry represents. Falls back to the
+// level code for older entries that pre-date the stored average.
+function entryDiff(h) {
+  if (typeof h.diff === "number") return clamp(h.diff, 1, 5);
+  if (LEVELS.includes(h.level)) return LEVELS.indexOf(h.level) + 1;
+  return null;
+}
+function diffLabel(v) {
+  return LEVELS[clamp(Math.round(v) - 1, 0, LEVELS.length - 1)];
 }
 
 function formatDate(iso) {
@@ -524,7 +535,10 @@ function finishRound() {
   $("btn-result-scores").style.display = "";
   $("btn-result-home").textContent = "Home";
 
-  const isNewBest = mode === "mistakes" ? false : recordHistory(score, mode, studyLabel());
+  // Average difficulty (A1–C1 → 1–5) of the questions in this round.
+  const diffVals = questions.map((q) => LEVELS.indexOf(q.level) + 1).filter((v) => v >= 1);
+  const roundDiff = diffVals.length ? diffVals.reduce((a, b) => a + b, 0) / diffVals.length : null;
+  const isNewBest = mode === "mistakes" ? false : recordHistory(score, mode, studyLabel(), roundDiff);
   const pct = total ? Math.round((score / total) * 100) : 0;
 
   // Per-round adaptive difficulty adjustment.
@@ -609,44 +623,37 @@ function finishRound() {
   applyProfile();
 }
 
-// Build an inline SVG line chart of round scores over time (0–20 on the y axis,
-// real timestamps on the x axis). No external libraries — works offline.
-function buildChartSVG(history) {
+// Build an inline SVG line chart of question difficulty over time: the A1–C1
+// scale (1–5) on the y axis, real timestamps on the x axis. Each point is the
+// average difficulty of a round's questions. No external libraries — offline.
+function buildChartSVG(pts) {
   const W = 320, H = 200;
-  const padL = 24, padR = 10, padT = 12, padB = 24;
+  const padL = 30, padR = 10, padT = 12, padB = 24;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
-
-  const pts = history
-    .map((h) => ({ t: new Date(h.date).getTime(), score: h.score }))
-    .filter((p) => !isNaN(p.t))
-    .sort((a, b) => a.t - b.t);
 
   const minT = pts[0].t;
   const maxT = pts[pts.length - 1].t;
   const spanT = maxT - minT;
   const x = (t) => (spanT === 0 ? padL + plotW / 2 : padL + ((t - minT) / spanT) * plotW);
-  const y = (s) => padT + (1 - s / 20) * plotH;
+  const y = (v) => padT + (1 - (v - 1) / 4) * plotH; // v in [1..5]
 
-  let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Score over time">`;
-  // horizontal gridlines + y labels at 0,5,10,15,20
-  for (const s of [0, 5, 10, 15, 20]) {
-    const yy = y(s).toFixed(1);
+  let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Question difficulty over time">`;
+  // gridlines + y labels A1..C1 (values 1..5)
+  LEVELS.forEach((lv, i) => {
+    const yy = y(i + 1).toFixed(1);
     svg += `<line class="chart-grid" x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}"/>`;
-    svg += `<text class="chart-axis-label" x="${padL - 4}" y="${(y(s) + 3).toFixed(1)}" text-anchor="end">${s}</text>`;
-  }
-  // area + line
+    svg += `<text class="chart-axis-label" x="${padL - 5}" y="${(y(i + 1) + 3).toFixed(1)}" text-anchor="end">${lv}</text>`;
+  });
   if (pts.length > 1) {
-    const line = pts.map((p) => `${x(p.t).toFixed(1)},${y(p.score).toFixed(1)}`).join(" ");
-    const area = `${padL},${y(0).toFixed(1)} ` + line + ` ${(x(maxT)).toFixed(1)},${y(0).toFixed(1)}`;
+    const line = pts.map((p) => `${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+    const area = `${padL},${y(1).toFixed(1)} ` + line + ` ${x(maxT).toFixed(1)},${y(1).toFixed(1)}`;
     svg += `<polygon class="chart-area" points="${area}"/>`;
     svg += `<polyline class="chart-line" points="${line}"/>`;
   }
-  // dots
   pts.forEach((p) => {
-    svg += `<circle class="chart-dot" cx="${x(p.t).toFixed(1)}" cy="${y(p.score).toFixed(1)}" r="${pts.length > 40 ? 1.6 : 3}"/>`;
+    svg += `<circle class="chart-dot" cx="${x(p.t).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="${pts.length > 40 ? 1.6 : 3}"/>`;
   });
-  // x labels: first & last date (and middle if room)
   const shortDate = (t) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
   const yLbl = H - 6;
   if (spanT === 0) {
@@ -659,6 +666,13 @@ function buildChartSVG(history) {
   return svg;
 }
 
+function difficultyPoints(history) {
+  return history
+    .map((h) => ({ t: new Date(h.date).getTime(), v: entryDiff(h) }))
+    .filter((p) => !isNaN(p.t) && p.v != null)
+    .sort((a, b) => a.t - b.t);
+}
+
 function renderProgress() {
   const history = loadHistory();
   const chart = $("progress-chart");
@@ -668,36 +682,35 @@ function renderProgress() {
   $("btn-clear-mistakes").style.display = nMistakes ? "" : "none";
   $("btn-clear-mistakes").textContent = `Clear saved mistakes (${nMistakes})`;
 
-  if (!history.length) {
-    chart.innerHTML = '<div class="scores-empty">No rounds yet.<br>Finish a 20-question round and your progress chart will appear here.</div>';
+  const pts = difficultyPoints(history);
+  if (!pts.length) {
+    chart.innerHTML = '<div class="scores-empty">No rounds yet.<br>Finish a 20-question round and your difficulty chart will appear here.</div>';
     stats.textContent = "";
-    $("btn-clear-scores").style.display = "none";
+    $("btn-clear-scores").style.display = history.length ? "" : "none";
     return;
   }
   $("btn-clear-scores").style.display = "";
 
-  chart.innerHTML = buildChartSVG(history);
+  chart.innerHTML = buildChartSVG(pts);
 
-  const scores = history.map((h) => h.score);
-  const best = Math.max(...scores);
-  const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
-  const last = history[history.length - 1];
+  const vals = pts.map((p) => p.v);
+  const cur = diffLabel(vals[vals.length - 1]);
+  const peak = diffLabel(Math.max(...vals));
   stats.innerHTML =
     `<strong>${history.length}</strong> round${history.length === 1 ? "" : "s"} · ` +
-    `avg <strong>${avg}</strong>/20 · best <strong>${best}</strong>/20 · ` +
-    `last ${last.score}/20 (${formatDate(last.date)})`;
+    `currently <strong>${cur}</strong> · peak <strong>${peak}</strong>`;
 }
 
 function renderHomeStats() {
   const history = loadHistory();
   const box = $("home-best");
+  const pts = difficultyPoints(history);
   if (!history.length) {
     box.innerHTML = "";
     return;
   }
-  const scores = history.map((h) => h.score);
-  const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
-  box.innerHTML = `<strong>${history.length}</strong> round${history.length === 1 ? "" : "s"} played &middot; average <strong>${avg}/20</strong>`;
+  const cur = pts.length ? ` &middot; currently <strong>${diffLabel(pts[pts.length - 1].v)}</strong>` : "";
+  box.innerHTML = `<strong>${history.length}</strong> round${history.length === 1 ? "" : "s"} played${cur}`;
 }
 
 function renderHomeMistakes() {
