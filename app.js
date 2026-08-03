@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.10.1";
+const APP_VERSION = "1.11.0";
 const ROUND_LENGTH = 10;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;
@@ -21,6 +21,7 @@ const ADAPT_MAX = 0.4;         // max ability change per round
 const MODES = {
   "nl-en": "NL → EN",
   "en-nl": "EN → NL",
+  "nl-nl": "NL → NL",
   "mixed": "Mixed",
   "mistakes": "Mistakes",
 };
@@ -91,6 +92,13 @@ function levelVocab(level) {
 function allVocab() {
   return LEVELS.flatMap((l) => VOCAB_BY_LEVEL[l]);
 }
+// Look up a full vocab entry (with its Dutch definition) by its Dutch word.
+const VOCAB_BY_NL = (() => {
+  const m = new Map();
+  for (const l of LEVELS) for (const e of VOCAB_BY_LEVEL[l]) if (!m.has(e.nl)) m.set(e.nl, e);
+  return m;
+})();
+function vocabByNl(nl) { return VOCAB_BY_NL.get(nl); }
 
 // ── Settings + "look-alike" (cognate) filter ──
 let settings = (() => {
@@ -310,13 +318,20 @@ function removeFromBank(nl, dir, level) {
 
 // ── Round building ──
 function makeQuestion(entry, dir, pool, level) {
-  const promptKey = dir === "nl-en" ? "nl" : "en";
+  // nl-en → answer in English; en-nl and nl-nl → answer is the Dutch word.
   const answerKey = dir === "nl-en" ? "en" : "nl";
+  // meaningKey is what we show as each option's meaning when translations are
+  // revealed: for a Dutch-word option that's its English; for an English option
+  // that's its Dutch word.
+  const meaningKey = dir === "nl-en" ? "nl" : "en";
   const answer = entry[answerKey];
+  const prompt = dir === "nl-nl" ? (entry.def || entry.nl)
+    : dir === "nl-en" ? entry.nl
+      : entry.en;
 
   const cls = wordClass(entry);
   const shuffled = shuffle(pool);
-  const distractors = []; // { val, other }
+  const distractors = []; // { val, meaning, nl, en }
   for (const sameClassOnly of [true, false]) {
     for (const cand of shuffled) {
       if (distractors.length >= OPTION_COUNT - 1) break;
@@ -326,15 +341,15 @@ function makeQuestion(entry, dir, pool, level) {
       if (val === answer) continue;
       if (overlaps(val, answer)) continue;
       if (distractors.some((d) => d.val === val || overlaps(d.val, val))) continue;
-      distractors.push({ val, other: cand[promptKey] });
+      distractors.push({ val, meaning: cand[meaningKey], nl: cand.nl, en: cand.en });
     }
   }
 
-  const translations = { [answer]: entry[promptKey] };
+  const translations = { [answer]: entry[meaningKey] };
   const optionInfo = { [answer]: { nl: entry.nl, en: entry.en } };
   distractors.forEach((d) => {
-    translations[d.val] = d.other;
-    optionInfo[d.val] = dir === "nl-en" ? { nl: d.other, en: d.val } : { nl: d.val, en: d.other };
+    translations[d.val] = d.meaning;
+    optionInfo[d.val] = { nl: d.nl, en: d.en };
   });
 
   return {
@@ -342,7 +357,7 @@ function makeQuestion(entry, dir, pool, level) {
     nl: entry.nl,
     en: entry.en,
     level,
-    prompt: entry[promptKey],
+    prompt,
     answer,
     options: shuffle([answer, ...distractors.map((d) => d.val)]),
     translations,
@@ -362,7 +377,8 @@ function buildRound(mode) {
       .sort((a, b) => b.count - a.count || new Date(b.last) - new Date(a.last));
     questions = bank.slice(0, ROUND_LENGTH).map((m) => {
       const pool = activePool(m.level).length ? activePool(m.level) : allVocab();
-      return makeQuestion({ nl: m.nl, en: m.en }, m.dir, pool, m.level);
+      const src = vocabByNl(m.nl) || { nl: m.nl, en: m.en }; // full entry carries the Dutch definition
+      return makeQuestion(src, m.dir, pool, m.level);
     });
   } else if (isAdaptive()) {
     // Sample each question's level from the ability distribution.
@@ -409,8 +425,11 @@ function renderQuestion() {
   $("q-number").textContent = `${label} ${round.index + 1}/${total}`;
   $("q-score").textContent = round.mode === "placement" ? "" : `✓ ${round.score}`;
   $("direction-label").textContent =
-    q.dir === "nl-en" ? "What does this mean in English?" : "What is the Dutch word?";
+    q.dir === "nl-en" ? "What does this mean in English?"
+      : q.dir === "nl-nl" ? "Welk woord past bij deze definitie?"
+        : "What is the Dutch word?";
   $("prompt-word").textContent = q.prompt;
+  $("prompt-word").classList.toggle("is-def", q.dir === "nl-nl");
 
   const box = $("options");
   box.innerHTML = "";
