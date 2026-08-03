@@ -322,6 +322,7 @@ body {
   color: var(--accent);
 }
 .prompt-word { font-size: 27px; line-height: 1.25; overflow-wrap: anywhere; }
+.prompt-word.is-def { font-size: 19px; font-weight: 600; line-height: 1.4; }
 
 .options { display: flex; flex-direction: column; gap: 10px; }
 .option-row { display: flex; align-items: stretch; gap: 8px; }
