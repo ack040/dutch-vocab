@@ -419,19 +419,16 @@ body {
   background: var(--card);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 2px 16px;
+  padding: 12px 16px;
   font-size: 14px;
 }
-.adapt-explain summary {
-  cursor: pointer;
-  padding: 12px 0;
+.adapt-explain .adapt-title {
   font-weight: 700;
   color: var(--primary-light);
-  list-style: none;
+  margin: 2px 0 4px;
 }
-.adapt-explain summary::-webkit-details-marker { display: none; }
-.adapt-explain[open] summary { border-bottom: 1px solid var(--border); }
-.adapt-explain p { margin: 10px 0; color: var(--text); line-height: 1.5; }
+.adapt-explain p { margin: 8px 0; color: var(--text); line-height: 1.5; }
+.adapt-explain p:last-child { margin-bottom: 2px; }
 .adapt-explain strong { color: var(--text); }
 .new-best { color: var(--accent); font-weight: 800; }
 

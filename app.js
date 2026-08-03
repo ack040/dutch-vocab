@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.11.0";
+const APP_VERSION = "1.11.1";
 const ROUND_LENGTH = 10;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;
@@ -726,7 +726,6 @@ function finishRound() {
       `<p>You scored <strong>${score}/${total}</strong> (${pct}%). Every round targets about <strong>${target}%</strong>: score above it and the difficulty rises, below it and it eases — the further from ${target}%, the bigger the step (up to ±0.4 per round).</p>` +
       `<p>So your level <strong>${moved}</strong>: <strong>${adaptBefore.toFixed(1)} → ${adaptAfter.toFixed(1)}</strong> on a 1–5 scale (1 = A1 … 5 = C1).</p>` +
       `<p>Your next quizzes will pull words from this mix: <strong>${mix.map((m) => `${m.level} ${m.pct}%`).join(" · ")}</strong>.</p>`;
-    explain.open = false;
     explain.classList.remove("gone");
   } else {
     explain.classList.add("gone");
