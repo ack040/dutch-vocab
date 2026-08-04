@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.11.1";
+const APP_VERSION = "1.11.2";
 const ROUND_LENGTH = 10;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;
@@ -877,7 +877,8 @@ function applyProfile() {
   if (isAdaptive()) {
     $("profile-level").textContent = "Adaptive";
     const mix = abilityMix(profile.ability);
-    $("mix-line").textContent = "Your mix: " + mix.map((m) => `${m.level} ${m.pct}%`).join(" · ");
+    $("mix-line").textContent = `Level ${profile.ability.toFixed(1)}/5 · ` +
+      mix.map((m) => `${m.level} ${m.pct}%`).join(" · ");
     $("mix-line").classList.remove("gone");
     $("word-count").textContent = `Adaptive · ${activeTotal()} words · offline · v${APP_VERSION}`;
   } else {
