@@ -396,8 +396,12 @@ body {
 .btn-next {
   align-items: center;
   font-weight: 700;
-  margin-top: auto;
+  margin-top: 4px;
 }
+/* Hidden Next takes no space, so the layout above stays put; when it appears it
+   sits right below the options instead of being pinned to the bottom of the
+   screen (where a mobile browser's toolbar would cover it). */
+.btn-next.hidden { display: none; }
 .hidden { visibility: hidden; }
 .gone { display: none !important; }
 
