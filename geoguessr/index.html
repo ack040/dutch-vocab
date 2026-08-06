@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f2027">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Geo Tells">
+  <title>GeoGuessr Tells Trainer</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Home -->
+  <main id="screen-home" class="screen active">
+    <header class="hero">
+      <div class="globe">🌍</div>
+      <h1>Tells Trainer</h1>
+      <p class="subtitle">Learn the meta clues you keep missing in GeoGuessr</p>
+    </header>
+
+    <section class="region-filter">
+      <p class="filter-label">Focus region</p>
+      <div class="chips" id="region-chips"></div>
+    </section>
+
+    <section class="mode-buttons">
+      <button class="btn btn-primary" data-mode="quiz">
+        <span class="btn-title">🎯 Name the country</span>
+        <span class="btn-sub">Guess from clues revealed one at a time</span>
+      </button>
+      <button class="btn btn-primary" data-mode="recall">
+        <span class="btn-title">🃏 Recall the tells</span>
+        <span class="btn-sub">See a country, list its tells from memory</span>
+      </button>
+      <button class="btn btn-primary" data-mode="study">
+        <span class="btn-title">🌍 Study the atlas</span>
+        <span class="btn-sub">Browse every country and its giveaways</span>
+      </button>
+      <button class="btn btn-primary btn-watch" data-mode="watch">
+        <span class="btn-title">⭐ Tells I miss</span>
+        <span class="btn-sub" id="watch-sub">Your personal watchlist</span>
+      </button>
+    </section>
+
+    <p class="tagline">A "tell" is anything in the panorama that pins down the
+      location — driving side, bollards, plate colour, script, poles, soil.</p>
+  </main>
+
+  <!-- Study: country list -->
+  <main id="screen-study" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" data-home aria-label="Home">←</button>
+      <h2>🌍 Atlas</h2>
+      <span class="spacer"></span>
+    </header>
+    <input id="study-search" class="search" type="search" placeholder="Search country or tell…" autocomplete="off">
+    <p class="list-hint" id="study-count"></p>
+    <section class="country-list" id="country-list"></section>
+  </main>
+
+  <!-- Study: single country detail -->
+  <main id="screen-detail" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" id="detail-back" aria-label="Back">←</button>
+      <h2 id="detail-title">Country</h2>
+      <span class="spacer"></span>
+    </header>
+    <p class="detail-region" id="detail-region"></p>
+    <p class="detail-hint">Tap ⭐ on any tell you tend to miss — it goes to your watchlist.</p>
+    <section class="tell-list" id="tell-list"></section>
+  </main>
+
+  <!-- Quiz -->
+  <main id="screen-quiz" class="screen">
+    <header class="topbar quiz-top">
+      <button class="icon-btn" id="quiz-quit" aria-label="Quit">✕</button>
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="quiz-progress"></div></div>
+        <div class="progress-text"><span id="quiz-count"></span><span id="quiz-score"></span></div>
+      </div>
+    </header>
+
+    <section class="clue-card">
+      <p class="clue-heading">Which country am I in?</p>
+      <ul class="clue-list" id="clue-list"></ul>
+      <button class="btn btn-ghost" id="btn-more-clues">🔎 Reveal another clue</button>
+    </section>
+
+    <section class="options" id="quiz-options"></section>
+
+    <section class="answer-reveal gone" id="answer-reveal"></section>
+
+    <button class="btn btn-primary btn-next hidden" id="btn-next">Next →</button>
+  </main>
+
+  <!-- Recall (flashcard) -->
+  <main id="screen-recall" class="screen">
+    <header class="topbar quiz-top">
+      <button class="icon-btn" id="recall-quit" aria-label="Quit">✕</button>
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="recall-progress"></div></div>
+        <div class="progress-text"><span id="recall-count"></span></div>
+      </div>
+    </header>
+
+    <section class="flashcard">
+      <div class="flash-flag" id="recall-flag">🏳️</div>
+      <h2 class="flash-name" id="recall-name"></h2>
+      <p class="flash-prompt" id="recall-prompt">Picture the streets. What tells give this country away?</p>
+      <button class="btn btn-primary" id="btn-flip">Show the tells</button>
+      <section class="tell-list gone" id="recall-tells"></section>
+    </section>
+
+    <div class="recall-actions hidden" id="recall-actions">
+      <button class="btn btn-good" id="btn-knew">✅ I knew these</button>
+      <button class="btn btn-bad" id="btn-missed">😬 I missed some</button>
+    </div>
+  </main>
+
+  <!-- Watchlist -->
+  <main id="screen-watch" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" data-home aria-label="Home">←</button>
+      <h2>⭐ Tells I miss</h2>
+      <span class="spacer"></span>
+    </header>
+    <p class="detail-hint" id="watch-intro"></p>
+    <section id="watch-body"></section>
+    <button class="btn btn-ghost btn-danger gone" id="btn-clear-watch">Clear watchlist</button>
+  </main>
+
+  <!-- Result -->
+  <main id="screen-result" class="screen">
+    <section class="result-card">
+      <p class="result-emoji" id="result-emoji"></p>
+      <h2 id="result-title"></h2>
+      <p class="result-score"><span id="result-score"></span><span class="result-total" id="result-total"></span></p>
+      <p class="result-detail" id="result-detail"></p>
+    </section>
+    <section class="review" id="result-review"></section>
+    <div class="result-actions">
+      <button class="btn btn-primary" id="btn-again">Play again</button>
+      <button class="btn btn-ghost" id="btn-result-watch">⭐ Review my watchlist</button>
+      <button class="btn btn-ghost" data-home>Home</button>
+    </div>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
+    }
+  </script>
+</body>
+</html>

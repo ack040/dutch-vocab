@@ -1,0 +1,11 @@
+{
+  "name": "GeoGuessr Tells Trainer",
+  "short_name": "Geo Tells",
+  "description": "Learn and drill the country/region tells you keep missing in GeoGuessr. Works offline.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f2027",
+  "theme_color": "#0f2027"
+}
