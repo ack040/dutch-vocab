@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.11.3";
+const APP_VERSION = "1.11.4";
 const ROUND_LENGTH = 10;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;
@@ -356,6 +356,8 @@ function makeQuestion(entry, dir, pool, level) {
     dir,
     nl: entry.nl,
     en: entry.en,
+    ex: entry.ex,
+    exen: entry.exen,
     level,
     prompt,
     answer,
@@ -455,6 +457,9 @@ function renderQuestion() {
 
   $("btn-dunno").classList.remove("gone");
   $("btn-reveal").classList.add("gone");
+  $("btn-sentence").classList.add("gone");
+  $("sentence-box").classList.add("gone");
+  $("sentence-box").innerHTML = "";
   $("add-hint").classList.add("gone");
   $("btn-next").classList.add("hidden");
 }
@@ -507,6 +512,8 @@ function lockAnswer(chosen, chosenBtn) {
     // Adaptive staircase: harder after a correct answer, easier after a wrong one.
     round.results.push({ levelIdx: q.levelIdx, correct });
     round.levelIdx = clamp(round.levelIdx + (correct ? 1 : -1), 0, LEVELS.length - 1);
+    // Let learners still reveal the other options during the discovery test.
+    $("btn-reveal").classList.remove("gone");
   } else {
     if (correct) {
       if (round.mode === "mistakes") masterMistake(q);
@@ -528,6 +535,10 @@ function lockAnswer(chosen, chosenBtn) {
     $("add-hint").classList.remove("gone");
   }
 
+  // Offer an example sentence when this word has one (helps when the short
+  // definition alone isn't clear). Works in both quiz and placement rounds.
+  if (q.ex) $("btn-sentence").classList.remove("gone");
+
   const nextBtn = $("btn-next");
   nextBtn.textContent = round.index + 1 < total ? "Next" : "See result";
   nextBtn.classList.remove("hidden");
@@ -545,6 +556,26 @@ function showTranslations() {
     }
   });
   $("btn-reveal").classList.add("gone");
+}
+
+// Reveal an example sentence for the current word (target language + English).
+function showSentence() {
+  const q = round.questions[round.index];
+  if (!q.ex) return;
+  const box = $("sentence-box");
+  box.innerHTML = "";
+  const t = document.createElement("p");
+  t.className = "sent-target";
+  t.textContent = q.ex;
+  box.appendChild(t);
+  if (q.exen) {
+    const e = document.createElement("p");
+    e.className = "sent-en";
+    e.textContent = q.exen;
+    box.appendChild(e);
+  }
+  box.classList.remove("gone");
+  $("btn-sentence").classList.add("gone");
 }
 
 function nextQuestion() {
@@ -800,6 +831,13 @@ function buildChartSVG(pts) {
   pts.forEach((p, i) => {
     svg += `<circle class="chart-dot" cx="${x(i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="${n > 40 ? 1.6 : 3}"/>`;
   });
+  // Score above each dot (thinned when the chart is crowded so labels don't collide).
+  const step = n <= 24 ? 1 : Math.ceil(n / 24);
+  pts.forEach((p, i) => {
+    if (p.s == null || (i % step !== 0 && i !== n - 1)) return;
+    const ly = Math.max(8, y(p.v) - 7);
+    svg += `<text class="chart-score" x="${x(i).toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle">${p.s}</text>`;
+  });
   const shortDate = (t) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" });
   const yLbl = H - 6;
   if (n === 1) {
@@ -814,9 +852,14 @@ function buildChartSVG(pts) {
 
 function difficultyPoints(history) {
   return history
-    .map((h) => ({ t: new Date(h.date).getTime(), v: entryDiff(h) }))
+    .map((h) => ({ t: new Date(h.date).getTime(), v: entryDiff(h), s: h.score }))
     .filter((p) => !isNaN(p.t) && p.v != null)
     .sort((a, b) => a.t - b.t);
+}
+// Only adaptive rounds carry a meaningful "level over time"; fixed-level rounds
+// sit at a constant level and would flatten the chart, so keep them out of it.
+function adaptiveHistory(history) {
+  return history.filter((h) => h.level === "Adaptive");
 }
 
 function renderProgress() {
@@ -828,9 +871,9 @@ function renderProgress() {
   $("btn-clear-mistakes").style.display = nMistakes ? "" : "none";
   $("btn-clear-mistakes").textContent = `Clear saved mistakes (${nMistakes})`;
 
-  const pts = difficultyPoints(history);
+  const pts = difficultyPoints(adaptiveHistory(history));
   if (!pts.length) {
-    chart.innerHTML = '<div class="scores-empty">No rounds yet.<br>Finish a round and your difficulty chart will appear here.</div>';
+    chart.innerHTML = '<div class="scores-empty">No adaptive rounds yet.<br>The chart tracks your level over time from adaptive rounds.</div>';
     stats.textContent = "";
     $("btn-clear-scores").style.display = history.length ? "" : "none";
     return;
@@ -843,7 +886,7 @@ function renderProgress() {
   const cur = diffLabel(vals[vals.length - 1]);
   const peak = diffLabel(Math.max(...vals));
   stats.innerHTML =
-    `<strong>${history.length}</strong> round${history.length === 1 ? "" : "s"} · ` +
+    `<strong>${pts.length}</strong> adaptive round${pts.length === 1 ? "" : "s"} · ` +
     `currently <strong>${cur}</strong> · peak <strong>${peak}</strong>`;
 }
 
@@ -929,8 +972,12 @@ function renderStudyChoices() {
 function updateRegisterButtons() {
   const adaptive = regChoice === "adaptive";
   $("btn-skip-test").style.display = adaptive ? "" : "none";
+  // For an existing user, switching to Adaptive just saves (keeping their
+  // current level) — the placement test is an optional "retake". Only a
+  // brand-new adaptive user is asked to take the test up front.
+  $("btn-skip-test").textContent = regEditing ? "Take placement test" : "Skip test — start balanced";
   $("btn-register").textContent = adaptive
-    ? "Take placement test"
+    ? (regEditing ? "Save" : "Take placement test")
     : (regEditing ? "Save" : "Start learning");
 }
 
@@ -989,7 +1036,9 @@ function submitRegister() {
   if (regChoice === "adaptive") {
     profile = { name, study: "adaptive", ability: keepAbility };
     saveProfile(profile);
-    startPlacement();
+    // Existing user just switching modes keeps their level — no test forced.
+    if (regEditing) { applyProfile(); show("home"); }
+    else startPlacement(); // brand-new adaptive user: discover the level
   } else {
     profile = { name, study: regChoice, ability: keepAbility };
     saveProfile(profile);
@@ -1008,6 +1057,21 @@ function skipTest() {
   show("home");
 }
 
+// The secondary button under Adaptive: a new user skips the test (starts
+// balanced); an existing user uses it to (optionally) retake the placement test.
+function secondaryRegisterAction() {
+  if (regEditing) {
+    const name = $("reg-name").value.trim();
+    if (!name) return;
+    const keepAbility = profile && typeof profile.ability === "number" ? profile.ability : START_ABILITY;
+    profile = { name, study: "adaptive", ability: keepAbility };
+    saveProfile(profile);
+    startPlacement();
+  } else {
+    skipTest();
+  }
+}
+
 // ── Wiring ──
 document.querySelectorAll("[data-mode]").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -1019,6 +1083,7 @@ document.querySelectorAll("[data-mode]").forEach((btn) => {
 $("btn-next").addEventListener("click", nextQuestion);
 $("btn-dunno").addEventListener("click", () => lockAnswer(null, null));
 $("btn-reveal").addEventListener("click", showTranslations);
+$("btn-sentence").addEventListener("click", showSentence);
 
 $("btn-quit").addEventListener("click", () => {
   if (confirm("Quit this round? Your progress will be lost.")) {
@@ -1050,7 +1115,7 @@ $("btn-scores-back").addEventListener("click", () => show(scoresBackTarget));
 
 $("btn-change-profile").addEventListener("click", showRegister);
 $("btn-register").addEventListener("click", submitRegister);
-$("btn-skip-test").addEventListener("click", skipTest);
+$("btn-skip-test").addEventListener("click", secondaryRegisterAction);
 $("btn-show-users").addEventListener("click", () => $("user-list").classList.toggle("gone"));
 $("btn-register-cancel").addEventListener("click", () => show("home"));
 $("reg-name").addEventListener("input", updateRegisterState);

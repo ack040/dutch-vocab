@@ -380,6 +380,21 @@ body {
   border: 1.5px solid var(--border);
   font-weight: 600;
 }
+.btn-sentence {
+  background: transparent;
+  color: var(--primary-light);
+  border: 1.5px solid var(--border);
+  font-weight: 600;
+}
+.sentence-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+.sent-target { font-size: 17px; font-weight: 600; color: var(--text); line-height: 1.35; }
+.sent-en { margin-top: 6px; font-size: 14px; color: var(--muted); font-style: italic; }
 
 /* Inline translation revealed inside each option box. */
 .opt-tr {
@@ -473,6 +488,7 @@ body {
 .chart-area { fill: var(--accent); opacity: 0.1; }
 .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .chart-dot { fill: var(--accent); }
+.chart-score { fill: var(--muted); font-size: 8px; font-weight: 600; font-family: inherit; }
 .progress-stats {
   text-align: center;
   color: var(--muted);
