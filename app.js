@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.11.4";
+const APP_VERSION = "1.11.5";
 const ROUND_LENGTH = 10;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;
@@ -466,7 +466,9 @@ function renderQuestion() {
 
 function setAddState(btn, added) {
   btn.classList.toggle("added", added);
-  btn.textContent = added ? "✓" : "＋";
+  // Use a star (not a check) so "saved to practice list" is never mistaken for
+  // the green "correct answer" marker sitting right next to it.
+  btn.textContent = added ? "★" : "＋";
   btn.setAttribute("aria-label", added ? "Remove from practice list" : "Add to practice list");
 }
 
