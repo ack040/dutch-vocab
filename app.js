@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "1.12.0";
+const APP_VERSION = "1.12.1";
 const ROUND_LENGTH = 10;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;
@@ -1221,6 +1221,9 @@ function renderUserList() {
 
 function showRegister() {
   regEditing = !!profile;
+  // Version on the welcome screen too — the home screen isn't reachable
+  // before registering, so this is the only place a new user can see it.
+  $("reg-version").textContent = `${allVocab().length} words · offline · v${APP_VERSION}`;
   $("reg-title").textContent = regEditing ? "Change user or level" : "Welcome!";
   $("reg-name").value = regEditing ? profile.name : "";
   regChoice = regEditing ? profile.study : null;

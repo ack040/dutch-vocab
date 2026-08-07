@@ -1,5 +1,5 @@
-const CACHE = "dutch-vocab-v25";
-const APP_VERSION = "1.12.0";
+const CACHE = "dutch-vocab-v26";
+const APP_VERSION = "1.12.1";
 const ASSETS = [
   "./",
   "./index.html",
