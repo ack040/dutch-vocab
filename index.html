@@ -19,7 +19,7 @@
   <main id="screen-register" class="screen active">
     <header class="hero">
       <div class="flag"><span></span><span></span><span></span></div>
-      <h1>Dutch Vocab</h1>
+      <h1 tabindex="-1" data-focus>Dutch Vocab</h1>
       <p class="subtitle" id="reg-title">Welcome!</p>
     </header>
 
@@ -53,7 +53,7 @@
       <button class="btn-change" id="btn-change-profile">Change</button>
     </header>
 
-    <div class="home-title"><h1>Dutch Vocab</h1><p class="subtitle">10 questions per round</p></div>
+    <div class="home-title"><h1 tabindex="-1" data-focus>Dutch Vocab</h1><p class="subtitle">10 questions per round</p></div>
     <p class="mix-line gone" id="mix-line"></p>
 
     <section class="mode-buttons">
@@ -107,8 +107,9 @@
     </header>
 
     <section class="question-card">
-      <p class="direction-label" id="direction-label"></p>
+      <p class="direction-label" id="direction-label" tabindex="-1" data-focus></p>
       <h2 class="prompt-word" id="prompt-word"></h2>
+      <button class="btn-speak gone" id="btn-speak" aria-label="Pronounce the Dutch word">🔊</button>
     </section>
 
     <section class="options" id="options"></section>
@@ -126,7 +127,7 @@
   <main id="screen-result" class="screen">
     <section class="result-card">
       <p class="result-emoji" id="result-emoji"></p>
-      <h2 id="result-title"></h2>
+      <h2 id="result-title" tabindex="-1" data-focus></h2>
       <p class="result-score"><span id="result-score"></span><span class="result-total" id="result-total">/10</span></p>
       <p class="result-detail" id="result-detail"></p>
     </section>
@@ -149,7 +150,7 @@
   <main id="screen-scores" class="screen">
     <header class="scores-header">
       <button class="quit" id="btn-scores-back" aria-label="Back">←</button>
-      <h2>📊 Progress</h2>
+      <h2 tabindex="-1" data-focus>📊 Progress</h2>
     </header>
     <section id="progress-chart"></section>
     <p class="progress-stats" id="progress-stats"></p>
@@ -163,7 +164,7 @@
   <main id="screen-options" class="screen">
     <header class="scores-header">
       <button class="quit" id="btn-options-back" aria-label="Back">←</button>
-      <h2>⚙️ Options</h2>
+      <h2 tabindex="-1" data-focus>⚙️ Options</h2>
     </header>
 
     <a class="opt-coffee" id="btn-coffee" target="_blank" rel="noopener">☕ Buy the developer a coffee</a>
@@ -175,9 +176,27 @@
       </span>
       <input type="checkbox" id="opt-hide-cognates" class="opt-switch" aria-label="Hide look-alike words">
     </label>
+
+    <button class="btn btn-ghost" id="btn-export">💾 Back up progress</button>
+    <label class="btn btn-ghost btn-import">
+      📥 Restore a backup
+      <input type="file" id="input-import" accept="application/json,.json" class="gone">
+    </label>
   </main>
 
-  <script src="data.js"></script>
+  <!-- Screen-reader announcements (answer feedback, question changes) -->
+  <div id="sr-status" class="sr-only" aria-live="polite"></div>
+  <!-- Shown once if the browser refuses to store anything (private mode etc.) -->
+  <p id="storage-warn" class="storage-warn gone">⚠️ This browser is blocking storage — you can play, but progress won't be saved.</p>
+  <!-- Undo / update snackbar -->
+  <div class="snackbar gone" id="snackbar" role="status">
+    <span id="snackbar-msg"></span>
+    <button type="button" id="snackbar-action" class="gone">Undo</button>
+  </div>
+
+  <!-- Version-keyed so the service worker can serve it cache-first: ~490KB
+       that never re-downloads until the version actually changes. -->
+  <script src="data.js?v=1.12.0"></script>
   <script src="app.js"></script>
   <script>
     if ("serviceWorker" in navigator) {

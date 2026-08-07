@@ -1,13 +1,17 @@
 "use strict";
 
-const APP_VERSION = "1.11.5";
+const APP_VERSION = "1.12.0";
 const ROUND_LENGTH = 10;
 const OPTION_COUNT = 4;
 const HISTORY_MAX = 300;
-const PROFILE_KEY = "dutch-vocab-profile";
-const USERS_KEY = "dutch-vocab-users";
-const SETTINGS_KEY = "dutch-vocab-settings";
+const STORE_PREFIX = "dutch-vocab";
+const PROFILE_KEY = STORE_PREFIX + "-profile";
+const USERS_KEY = STORE_PREFIX + "-users";
+const SETTINGS_KEY = STORE_PREFIX + "-settings";
 const COFFEE_URL = "https://buymeacoffee.com/rockstonepebble"; // placeholder — swap for the real link
+const TARGET_LANG = "nl";      // lang attribute for target-language content
+const SPEECH_LANG = "nl-NL";   // voice for the pronunciation button
+const MASTER_STREAK = 2;       // correct answers needed to retire a saved mistake
 
 // Adaptive tuning
 const ABILITY_SIGMA = 0.85;   // spread of the level mix around the ability
@@ -15,8 +19,7 @@ const START_ABILITY = 3.0;    // default = B1-ish
 const PLACEMENT_SIZE = 12;
 const PLACEMENT_START_IDX = 2; // B1
 const ADAPT_TARGET = 0.7;      // score above this drifts harder, below drifts easier
-const ADAPT_K = 0.8;
-const ADAPT_MAX = 0.4;         // max ability change per round
+const ADAPT_MAX = 0.4;         // max ability change per round, both directions
 
 const MODES = {
   "nl-en": "NL → EN",
@@ -48,7 +51,63 @@ function show(name) {
   Object.values(screens).forEach((s) => s.classList.remove("active"));
   screens[name].classList.add("active");
   window.scrollTo(0, 0);
+  // Move keyboard/screen-reader focus to the new screen's heading so the
+  // transition is announced instead of silently dropping focus to <body>.
+  const target = screens[name].querySelector("[data-focus]");
+  if (target) target.focus({ preventScroll: true });
 }
+
+// One polite live region: screen readers hear answer feedback in real time.
+function announce(text) {
+  const el = $("sr-status");
+  if (el) { el.textContent = ""; el.textContent = text; }
+}
+
+// ── Guarded storage ──
+// localStorage can throw on any call (storage denied, quota full, private
+// mode). Every read already had a try/catch; writes did not, so one throw
+// mid-answer could kill the quiz. This adapter guards both directions and
+// falls back to an in-memory map so the app keeps working for the session
+// even when nothing can persist.
+const store = (() => {
+  const mem = new Map();
+  let broken = false;
+  const warn = () => {
+    if (broken) return;
+    broken = true;
+    const el = $("storage-warn");
+    if (el) el.classList.remove("gone");
+  };
+  return {
+    getRaw(key) {
+      try { const v = localStorage.getItem(key); return v != null ? v : (mem.get(key) ?? null); }
+      catch { warn(); return mem.get(key) ?? null; }
+    },
+    setRaw(key, value) {
+      mem.set(key, value);
+      try { localStorage.setItem(key, value); } catch { warn(); }
+    },
+    get(key) {
+      try { return JSON.parse(this.getRaw(key)); } catch { return null; }
+    },
+    set(key, value) { this.setRaw(key, JSON.stringify(value)); },
+    remove(key) {
+      mem.delete(key);
+      try { localStorage.removeItem(key); } catch { warn(); }
+    },
+    // All stored keys for this app (used by user discovery and backup).
+    keys() {
+      const out = new Set(mem.keys());
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith(STORE_PREFIX)) out.add(k);
+        }
+      } catch { warn(); }
+      return [...out].filter((k) => k.startsWith(STORE_PREFIX));
+    },
+  };
+})();
 
 // ── Utilities ──
 function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
@@ -70,7 +129,10 @@ function segments(text) {
     .toLowerCase()
     .replace(/\(.*?\)/g, "")
     .split(/[,;]/)
-    .map((s) => s.replace(/^(to|the|a|an|de|het|zich)\s+/g, "").trim())
+    // Trim BEFORE stripping the prefix: after splitting on commas the second
+    // sense arrives as " to run", and the ^-anchored prefix regex never
+    // matched past the leading space, silently missing many synonym pairs.
+    .map((s) => s.trim().replace(/^(to|the|a|an|de|het|zich)\s+/, "").trim())
     .filter(Boolean);
 }
 
@@ -101,11 +163,9 @@ const VOCAB_BY_NL = (() => {
 function vocabByNl(nl) { return VOCAB_BY_NL.get(nl); }
 
 // ── Settings + "look-alike" (cognate) filter ──
-let settings = (() => {
-  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch { return {}; }
-})();
+let settings = store.get(SETTINGS_KEY) || {};
 function saveSettings() {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  store.set(SETTINGS_KEY, settings);
 }
 
 function cnorm(s) {
@@ -145,13 +205,15 @@ let _poolCache = null;
 let _lookAlikeCount = null;
 function invalidatePools() { _poolCache = null; }
 // The vocab pool for a level, minus look-alikes when the setting is on.
+// Always returns an array, even for an unknown level (e.g. a stale mistakes-
+// bank entry after a data revision) — indexing undefined would kill the round.
 function activePool(level) {
-  if (!settings.hideCognates) return VOCAB_BY_LEVEL[level];
+  if (!settings.hideCognates) return VOCAB_BY_LEVEL[level] || [];
   if (!_poolCache) {
     _poolCache = {};
     for (const l of LEVELS) _poolCache[l] = VOCAB_BY_LEVEL[l].filter((e) => !isLookAlike(e));
   }
-  return _poolCache[level];
+  return _poolCache[level] || [];
 }
 function lookAlikeCount() {
   if (_lookAlikeCount == null) {
@@ -197,35 +259,40 @@ function nearestLevel(ability) {
 
 // ── Profiles (username + study choice + ability) ──
 function loadProfile() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(PROFILE_KEY));
-    if (raw && raw.name) {
-      const study = raw.study || raw.level; // migrate old {name,level}
-      const ability = typeof raw.ability === "number" ? raw.ability : START_ABILITY;
-      if (study === "adaptive" || LEVELS.includes(study)) {
-        return { name: raw.name, study, ability };
-      }
+  const raw = store.get(PROFILE_KEY);
+  if (raw && raw.name) {
+    const study = raw.study || raw.level; // migrate old {name,level}
+    const ability = typeof raw.ability === "number" ? raw.ability : START_ABILITY;
+    if (study === "adaptive" || LEVELS.includes(study)) {
+      return { name: raw.name, study, ability };
     }
-  } catch {}
+  }
   return null;
 }
 
 function saveProfile(p) {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+  store.set(PROFILE_KEY, p);
   upsertUser(p);
+}
+
+// The ability to give a profile for `name`: their own stored level when they
+// are already registered — never the previous user's. Typing another person's
+// name into the form used to transplant the active user's ability onto them,
+// silently destroying their real level.
+function abilityFor(name) {
+  if (profile && profile.name === name && typeof profile.ability === "number") return profile.ability;
+  const u = loadUsers().find((x) => x.name === name);
+  if (u && typeof u.ability === "number") return u.ability;
+  return START_ABILITY;
 }
 
 // ── Registered users (so a returning user can be picked, not retyped) ──
 function loadUsers() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(USERS_KEY));
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
+  const raw = store.get(USERS_KEY);
+  return Array.isArray(raw) ? raw : [];
 }
 function saveUsers(list) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(list));
+  store.set(USERS_KEY, list);
 }
 function upsertUser(p) {
   const list = loadUsers();
@@ -238,8 +305,8 @@ function upsertUser(p) {
 // registry yet (e.g. from before this feature existed), so they still appear.
 function syncUsers() {
   const byName = new Map(loadUsers().map((u) => [u.name, u]));
-  for (let i = 0; i < localStorage.length; i++) {
-    const m = /^dutch-vocab-(?:scores|mistakes)::(.+)$/.exec(localStorage.key(i));
+  for (const key of store.keys()) {
+    const m = /-(?:scores|mistakes)::(.+)$/.exec(key);
     if (m && !byName.has(m[1])) {
       byName.set(m[1], { name: m[1], study: "adaptive", ability: START_ABILITY });
     }
@@ -264,21 +331,18 @@ function studyLabel() {
 }
 
 // Per-user storage keys, so each username keeps its own scores/mistakes.
-function scoresKey() { return "dutch-vocab-scores::" + profile.name; }
-function mistakesKey() { return "dutch-vocab-mistakes::" + profile.name; }
+function scoresKey() { return STORE_PREFIX + "-scores::" + profile.name; }
+function mistakesKey() { return STORE_PREFIX + "-mistakes::" + profile.name; }
+function seenKey() { return STORE_PREFIX + "-seen::" + profile.name; }
 
 // ── Mistakes bank (per user) ──
-// Each item: { nl, en, dir, level, count, last }, keyed by nl+dir+level.
+// Each item: { nl, en, dir, level, count, streak, last }, keyed by nl+dir+level.
 function loadMistakes() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(mistakesKey()));
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
+  const raw = store.get(mistakesKey());
+  return Array.isArray(raw) ? raw : [];
 }
 function saveMistakes(list) {
-  localStorage.setItem(mistakesKey(), JSON.stringify(list));
+  store.set(mistakesKey(), list);
 }
 function mistakeKey(nl, dir, level) {
   return nl + "|" + dir + "|" + level;
@@ -290,15 +354,62 @@ function recordMistake(q) {
   const now = new Date().toISOString();
   if (existing) {
     existing.count++;
+    existing.streak = 0; // a wrong answer restarts the mastery streak
     existing.last = now;
   } else {
-    list.push({ nl: q.nl, en: q.en, dir: q.dir, level: q.level, count: 1, last: now });
+    list.push({ nl: q.nl, en: q.en, dir: q.dir, level: q.level, count: 1, streak: 0, last: now });
   }
   saveMistakes(list);
 }
+// A word leaves the practice list only after MASTER_STREAK correct answers —
+// with 4-option multiple choice a single correct can be a 25% lucky guess.
 function masterMistake(q) {
   const key = mistakeKey(q.nl, q.dir, q.level);
-  saveMistakes(loadMistakes().filter((x) => mistakeKey(x.nl, x.dir, x.level) !== key));
+  const list = loadMistakes();
+  const item = list.find((x) => mistakeKey(x.nl, x.dir, x.level) === key);
+  if (!item) return;
+  item.streak = (item.streak || 0) + 1;
+  if (item.streak >= MASTER_STREAK) {
+    saveMistakes(list.filter((x) => mistakeKey(x.nl, x.dir, x.level) !== key));
+  } else {
+    saveMistakes(list);
+  }
+}
+
+// ── Per-word exposure (per user) — biases sampling toward unseen words ──
+let _seen = null, _seenFor = null;
+function seenMap() {
+  if (!_seen || _seenFor !== profile.name) {
+    _seen = store.get(seenKey()) || {};
+    _seenFor = profile.name;
+  }
+  return _seen;
+}
+function markSeen(nl, correct) {
+  const m = seenMap();
+  const e = m[nl] || { n: 0, c: 0 };
+  e.n++;
+  if (correct) e.c++;
+  e.t = Date.now();
+  m[nl] = e;
+  store.set(seenKey(), m);
+}
+// Pick from `pool`, preferring words the user has seen least (and not just
+// now). Sampling 3 random candidates and keeping the least-seen biases hard
+// toward coverage without ever starving any word.
+function pickEntry(pool, used) {
+  const m = seenMap();
+  let best = null, bestScore = Infinity;
+  for (let i = 0; i < 3; i++) {
+    const cand = pool[Math.floor(Math.random() * pool.length)];
+    if (!cand) continue;
+    if (used && used.has(cand.nl)) continue;
+    const e = m[cand.nl];
+    const recent = e && e.t && Date.now() - e.t < 20 * 60 * 1000 ? 100 : 0;
+    const score = (e ? e.n : 0) + recent;
+    if (score < bestScore) { best = cand; bestScore = score; }
+  }
+  return best || pool[Math.floor(Math.random() * pool.length)];
 }
 function isInBank(nl, dir, level) {
   const k = mistakeKey(nl, dir, level);
@@ -339,8 +450,12 @@ function makeQuestion(entry, dir, pool, level) {
       if (sameClassOnly && wordClass(cand) !== cls) continue;
       const val = cand[answerKey];
       if (val === answer) continue;
-      if (overlaps(val, answer)) continue;
-      if (distractors.some((d) => d.val === val || overlaps(d.val, val))) continue;
+      // Reject near-synonyms on BOTH sides, regardless of direction. Checking
+      // only the answer side let en-nl/nl-nl rounds offer two correct options
+      // (prompt "easy" with both "makkelijk" and "gemakkelijk"): the English
+      // senses — the side the prompt is drawn from — were never compared.
+      if (overlaps(cand.en, entry.en) || overlaps(cand.nl, entry.nl)) continue;
+      if (distractors.some((d) => d.val === val || overlaps(d.en, cand.en) || overlaps(d.nl, cand.nl))) continue;
       distractors.push({ val, meaning: cand[meaningKey], nl: cand.nl, en: cand.en });
     }
   }
@@ -380,22 +495,28 @@ function buildRound(mode) {
     questions = bank.slice(0, ROUND_LENGTH).map((m) => {
       const pool = activePool(m.level).length ? activePool(m.level) : allVocab();
       const src = vocabByNl(m.nl) || { nl: m.nl, en: m.en }; // full entry carries the Dutch definition
-      return makeQuestion(src, m.dir, pool, m.level);
+      // An orphaned nl-nl entry (word since renamed in data.js) has no def, so
+      // its "definition" prompt would be the answer itself — ask it as nl-en.
+      const dir = m.dir === "nl-nl" && !src.def ? "nl-en" : m.dir;
+      return makeQuestion(src, dir, pool, m.level);
     });
   } else if (isAdaptive()) {
-    // Sample each question's level from the ability distribution.
+    // Sample each question's level from the ability distribution, preferring
+    // words this user has seen least so the whole level gets covered.
     const used = new Set();
     questions = [];
     for (let i = 0; i < ROUND_LENGTH; i++) {
       let entry, level, tries = 0;
       do {
         level = sampleLevel(profile.ability);
-        const pool = activePool(level);
-        entry = pool[Math.floor(Math.random() * pool.length)];
+        let pool = activePool(level);
+        if (!pool.length) pool = allVocab();
+        entry = pickEntry(pool, used);
         tries++;
       } while (used.has(entry.nl) && tries < 12);
       used.add(entry.nl);
-      questions.push(makeQuestion(entry, pickDir(mode), activePool(level), level));
+      const qPool = activePool(level).length ? activePool(level) : allVocab();
+      questions.push(makeQuestion(entry, pickDir(mode), qPool, level));
     }
   } else {
     const level = profile.study;
@@ -426,13 +547,20 @@ function renderQuestion() {
   const label = round.mode === "placement" ? "Placement" : `Question`;
   $("q-number").textContent = `${label} ${round.index + 1}/${total}`;
   $("q-score").textContent = round.mode === "placement" ? "" : `✓ ${round.score}`;
-  $("direction-label").textContent =
+  const dirLabel = $("direction-label");
+  dirLabel.textContent =
     q.dir === "nl-en" ? "What does this mean in English?"
       : q.dir === "nl-nl" ? "Welk woord past bij deze definitie?"
         : "What is the Dutch word?";
-  $("prompt-word").textContent = q.prompt;
-  $("prompt-word").classList.toggle("is-def", q.dir === "nl-nl");
+  // Language of parts: without lang attributes, screen readers and read-aloud
+  // pronounce every Dutch word with English phonemes.
+  dirLabel.lang = q.dir === "nl-nl" ? TARGET_LANG : "en";
+  const promptEl = $("prompt-word");
+  promptEl.textContent = q.prompt;
+  promptEl.lang = q.dir === "en-nl" ? "en" : TARGET_LANG;
+  promptEl.classList.toggle("is-def", q.dir === "nl-nl");
 
+  const optionLang = q.dir === "nl-en" ? "en" : TARGET_LANG;
   const box = $("options");
   box.innerHTML = "";
   q.options.forEach((opt) => {
@@ -441,6 +569,7 @@ function renderQuestion() {
     const btn = document.createElement("button");
     btn.className = "option";
     btn.dataset.value = opt;
+    btn.lang = optionLang;
     const lbl = document.createElement("span");
     lbl.className = "opt-label";
     lbl.textContent = opt;
@@ -462,14 +591,30 @@ function renderQuestion() {
   $("sentence-box").innerHTML = "";
   $("add-hint").classList.add("gone");
   $("btn-next").classList.add("hidden");
+  // Pronunciation: only when it doesn't leak the answer — in en-nl and nl-nl
+  // the Dutch word IS the answer, so the button appears after locking instead.
+  $("btn-speak").classList.toggle("gone", !speechReady || q.dir !== "nl-en");
+  announce(`Question ${round.index + 1} of ${total}. ${q.prompt}`);
 }
 
-function setAddState(btn, added) {
+// A literal ✓/✗ inside the option, so right-vs-wrong never relies on the
+// green/red hue alone (and iOS has no vibration fallback).
+function addMark(btn, glyph) {
+  if (btn.querySelector(".opt-mark")) return;
+  const m = document.createElement("span");
+  m.className = "opt-mark";
+  m.textContent = glyph;
+  btn.appendChild(m);
+}
+
+function setAddState(btn, added, word) {
   btn.classList.toggle("added", added);
   // Use a star (not a check) so "saved to practice list" is never mistaken for
   // the green "correct answer" marker sitting right next to it.
   btn.textContent = added ? "★" : "＋";
-  btn.setAttribute("aria-label", added ? "Remove from practice list" : "Add to practice list");
+  // Name the word so the four add buttons are distinguishable to a screen reader.
+  const what = word ? `“${word}”` : "this word";
+  btn.setAttribute("aria-label", added ? `Remove ${what} from practice list` : `Add ${what} to practice list`);
 }
 
 function toggleAdd(btn) {
@@ -478,10 +623,10 @@ function toggleAdd(btn) {
   if (!info) return;
   if (isInBank(info.nl, q.dir, q.level)) {
     removeFromBank(info.nl, q.dir, q.level);
-    setAddState(btn, false);
+    setAddState(btn, false, info.nl);
   } else {
     addToBank(info, q.dir, q.level);
-    setAddState(btn, true);
+    setAddState(btn, true, info.nl);
     if (navigator.vibrate) navigator.vibrate(10);
   }
 }
@@ -498,13 +643,19 @@ function lockAnswer(chosen, chosenBtn) {
     if (chosenBtn) chosenBtn.classList.add("correct");
     if (navigator.vibrate) navigator.vibrate(15);
   } else {
-    if (chosenBtn) chosenBtn.classList.add("wrong");
+    if (chosenBtn) { chosenBtn.classList.add("wrong"); addMark(chosenBtn, "✗"); }
     if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
   }
   buttons.forEach((b) => {
-    if (b.dataset.value === q.answer) b.classList.add("correct");
+    if (b.dataset.value === q.answer) { b.classList.add("correct"); addMark(b, "✓"); }
     else if (b !== chosenBtn) b.classList.add("dimmed");
   });
+  markSeen(q.nl, correct);
+  announce(correct
+    ? `Correct: ${q.answer}. Score ${round.score}.`
+    : chosen === null
+      ? `The answer is ${q.answer}.`
+      : `Wrong. The answer is ${q.answer}.`);
 
   $("q-score").textContent = round.mode === "placement" ? "" : `✓ ${round.score}`;
   $("progress-fill").style.width = `${((round.index + 1) / total) * 100}%`;
@@ -532,7 +683,7 @@ function lockAnswer(chosen, chosenBtn) {
     [...$("options").querySelectorAll(".opt-add")].forEach((ab) => {
       ab.classList.remove("gone");
       const info = q.optionInfo[ab.dataset.value];
-      setAddState(ab, !!info && isInBank(info.nl, q.dir, q.level));
+      setAddState(ab, !!info && isInBank(info.nl, q.dir, q.level), info && info.nl);
     });
     $("add-hint").classList.remove("gone");
   }
@@ -540,19 +691,27 @@ function lockAnswer(chosen, chosenBtn) {
   // Offer an example sentence when this word has one (helps when the short
   // definition alone isn't clear). Works in both quiz and placement rounds.
   if (q.ex) $("btn-sentence").classList.remove("gone");
+  // Post-answer the Dutch word is no longer a secret — offer pronunciation.
+  if (speechReady) $("btn-speak").classList.remove("gone");
 
   const nextBtn = $("btn-next");
   nextBtn.textContent = round.index + 1 < total ? "Next" : "See result";
   nextBtn.classList.remove("hidden");
+  // Put keyboard/AT focus on Next: the tapped option just got disabled, which
+  // would otherwise silently drop focus to <body>.
+  nextBtn.focus({ preventScroll: true });
 }
 
 function showTranslations() {
   const q = round.questions[round.index];
+  // The revealed meaning is in the opposite language from the option itself.
+  const trLang = q.dir === "nl-en" ? TARGET_LANG : "en";
   [...$("options").querySelectorAll(".option")].forEach((btn) => {
     btn.classList.remove("dimmed");
     if (!btn.querySelector(".opt-tr")) {
       const tr = document.createElement("span");
       tr.className = "opt-tr";
+      tr.lang = trLang;
       tr.textContent = q.translations[btn.dataset.value] || "";
       btn.appendChild(tr);
     }
@@ -568,6 +727,7 @@ function showSentence() {
   box.innerHTML = "";
   const t = document.createElement("p");
   t.className = "sent-target";
+  t.lang = TARGET_LANG;
   t.textContent = q.ex;
   box.appendChild(t);
   if (q.exen) {
@@ -602,8 +762,17 @@ function nextQuestion() {
 // ── Placement test ──
 function placementQuestion(levelIdx) {
   const level = LEVELS[levelIdx];
-  const pool = activePool(level);
-  const entry = pool[Math.floor(Math.random() * pool.length)];
+  let pool = activePool(level);
+  if (!pool.length) pool = allVocab();
+  // Never repeat a word within one placement test — a repeat (especially after
+  // "Show all translations") is answered from short-term memory and inflates
+  // the measured level.
+  let entry, tries = 0;
+  do {
+    entry = pool[Math.floor(Math.random() * pool.length)];
+    tries++;
+  } while (round.used.has(entry.nl) && tries < 15);
+  round.used.add(entry.nl);
   const q = makeQuestion(entry, Math.random() < 0.5 ? "nl-en" : "en-nl", pool, level);
   q.levelIdx = levelIdx;
   return q;
@@ -619,6 +788,7 @@ function startPlacement() {
     levelIdx: PLACEMENT_START_IDX,
     results: [],
     questions: [],
+    used: new Set(),
   };
   round.questions.push(placementQuestion(round.levelIdx));
   show("quiz");
@@ -629,7 +799,10 @@ function finishPlacement() {
   const idxs = round.results.map((r) => r.levelIdx);
   const tail = idxs.slice(Math.floor(idxs.length / 3)); // drop burn-in
   const meanIdx = tail.reduce((a, b) => a + b, 0) / (tail.length || 1);
-  const ability = clamp(1 + meanIdx, 1, 5);
+  // The 1-up/1-down staircase settles where you answer ~50% correctly, but the
+  // round-to-round drift keeps you where you score ~70% — roughly half a level
+  // easier. Correct for that so a fresh placement doesn't immediately slide.
+  const ability = clamp(1 + meanIdx - 0.5, 1, 5);
   profile = { name: profile.name, study: "adaptive", ability };
   saveProfile(profile);
   showPlacementResult(ability);
@@ -653,22 +826,29 @@ function showPlacementResult(ability) {
 
 // ── Round history (per user) — every completed round, in time order ──
 function loadHistory() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(scoresKey()));
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
+  const raw = store.get(scoresKey());
+  return Array.isArray(raw) ? raw : [];
 }
 function saveHistory(list) {
-  localStorage.setItem(scoresKey(), JSON.stringify(list));
+  store.set(scoresKey(), list);
 }
-function recordHistory(score, mode, level, diff) {
+// Rounds used to be 20 questions; entries recorded then have no `total`.
+// Compare percentages so an old 14/20 (70%) can't outrank a perfect 10/10.
+function entryPct(h) {
+  const total = h.total || (h.score > ROUND_LENGTH ? 20 : ROUND_LENGTH);
+  return total ? h.score / total : 0;
+}
+function recordHistory(score, total, mode, level, diff, ability) {
   const list = loadHistory();
-  const prevBest = list.length ? Math.max(...list.map((s) => s.score)) : -1;
-  list.push({ score, mode, level, diff, date: new Date().toISOString() });
+  const prevBest = list.length ? Math.max(...list.map(entryPct)) : -1;
+  list.push({
+    score, total, mode, level, diff,
+    ability, // the engine's post-round belief — what the chart plots
+    adaptive: isAdaptive(), // stable flag; never key logic on a display label
+    date: new Date().toISOString(),
+  });
   saveHistory(list.slice(-HISTORY_MAX));
-  return list.length > 1 && score > prevBest; // a genuine improvement, not the first round
+  return list.length > 1 && score / total > prevBest; // a genuine improvement, not the first round
 }
 
 // The A1–C1 difficulty (1–5) a history entry represents. Falls back to the
@@ -700,20 +880,33 @@ function finishRound() {
   // Average difficulty (A1–C1 → 1–5) of the questions in this round.
   const diffVals = questions.map((q) => LEVELS.indexOf(q.level) + 1).filter((v) => v >= 1);
   const roundDiff = diffVals.length ? diffVals.reduce((a, b) => a + b, 0) / diffVals.length : null;
-  const isNewBest = mode === "mistakes" ? false : recordHistory(score, mode, studyLabel(), roundDiff);
   const pct = total ? Math.round((score / total) * 100) : 0;
 
-  // Per-round adaptive difficulty adjustment.
+  // Per-round adaptive difficulty adjustment (before recording history, so the
+  // history row carries the post-round ability the chart plots).
   let driftNote = "";
   let adaptBefore = null, adaptAfter = null;
   if (mode !== "mistakes" && isAdaptive()) {
     adaptBefore = profile.ability;
-    const delta = clamp((score / total - ADAPT_TARGET) * ADAPT_K, -ADAPT_MAX, ADAPT_MAX);
+    // Normalised so the maximum step is ±ADAPT_MAX in BOTH directions — the
+    // old (pct - target) * K form could fall 0.4 but rise at most 0.24.
+    const p = total ? score / total : 0;
+    const delta = p >= ADAPT_TARGET
+      ? ((p - ADAPT_TARGET) / (1 - ADAPT_TARGET)) * ADAPT_MAX
+      : ((p - ADAPT_TARGET) / ADAPT_TARGET) * ADAPT_MAX;
     profile.ability = clamp(adaptBefore + delta, 1, 5);
     saveProfile(profile);
     adaptAfter = profile.ability;
     const d = adaptAfter - adaptBefore;
     driftNote = d > 0.03 ? " · difficulty ↑" : d < -0.03 ? " · difficulty ↓" : "";
+  }
+
+  const isNewBest = mode === "mistakes" ? false
+    : recordHistory(score, total, mode, studyLabel(), roundDiff, adaptAfter != null ? adaptAfter : undefined);
+
+  // Ask the browser to protect our saved data from best-effort eviction.
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().catch(() => {});
   }
 
   const remaining = loadMistakes().length;
@@ -742,7 +935,7 @@ function finishRound() {
   if (mode === "mistakes") {
     detail += remaining === 0
       ? ' · <span class="new-best">no mistakes left!</span>'
-      : ` · ${remaining} word${remaining === 1 ? "" : "s"} still to review`;
+      : ` · ${remaining} word${remaining === 1 ? "" : "s"} still to review (${MASTER_STREAK}× correct retires a word)`;
   } else {
     if (isNewBest) detail += ' · <span class="new-best">New best score!</span>';
     detail += driftNote;
@@ -854,14 +1047,22 @@ function buildChartSVG(pts) {
 
 function difficultyPoints(history) {
   return history
-    .map((h) => ({ t: new Date(h.date).getTime(), v: entryDiff(h), s: h.score }))
+    // Prefer the engine's own post-round ability when a row carries it: the
+    // per-round question-difficulty average wobbles ~±0.3 levels from sampling
+    // noise alone. Older rows fall back to that average.
+    .map((h) => ({
+      t: new Date(h.date).getTime(),
+      v: typeof h.ability === "number" ? clamp(h.ability, 1, 5) : entryDiff(h),
+      s: h.score,
+    }))
     .filter((p) => !isNaN(p.t) && p.v != null)
     .sort((a, b) => a.t - b.t);
 }
 // Only adaptive rounds carry a meaningful "level over time"; fixed-level rounds
 // sit at a constant level and would flatten the chart, so keep them out of it.
+// The stable `adaptive` flag is preferred; the label match keeps old rows.
 function adaptiveHistory(history) {
-  return history.filter((h) => h.level === "Adaptive");
+  return history.filter((h) => h.adaptive === true || h.level === "Adaptive");
 }
 
 function renderProgress() {
@@ -895,7 +1096,9 @@ function renderProgress() {
 function renderHomeStats() {
   const history = loadHistory();
   const box = $("home-best");
-  const pts = difficultyPoints(history);
+  // Same filter as the progress chart, so home and chart never disagree on
+  // what "currently" means.
+  const pts = difficultyPoints(adaptiveHistory(history));
   if (!history.length) {
     box.innerHTML = "";
     return;
@@ -1034,15 +1237,14 @@ function showRegister() {
 function submitRegister() {
   const name = $("reg-name").value.trim();
   if (!name || !regChoice) return;
-  const keepAbility = profile && typeof profile.ability === "number" ? profile.ability : START_ABILITY;
   if (regChoice === "adaptive") {
-    profile = { name, study: "adaptive", ability: keepAbility };
+    profile = { name, study: "adaptive", ability: abilityFor(name) };
     saveProfile(profile);
     // Existing user just switching modes keeps their level — no test forced.
     if (regEditing) { applyProfile(); show("home"); }
     else startPlacement(); // brand-new adaptive user: discover the level
   } else {
-    profile = { name, study: regChoice, ability: keepAbility };
+    profile = { name, study: regChoice, ability: abilityFor(name) };
     saveProfile(profile);
     applyProfile();
     show("home");
@@ -1052,8 +1254,7 @@ function submitRegister() {
 function skipTest() {
   const name = $("reg-name").value.trim();
   if (!name) return;
-  const keepAbility = profile && typeof profile.ability === "number" ? profile.ability : START_ABILITY;
-  profile = { name, study: "adaptive", ability: keepAbility };
+  profile = { name, study: "adaptive", ability: abilityFor(name) };
   saveProfile(profile);
   applyProfile();
   show("home");
@@ -1065,13 +1266,89 @@ function secondaryRegisterAction() {
   if (regEditing) {
     const name = $("reg-name").value.trim();
     if (!name) return;
-    const keepAbility = profile && typeof profile.ability === "number" ? profile.ability : START_ABILITY;
-    profile = { name, study: "adaptive", ability: keepAbility };
+    profile = { name, study: "adaptive", ability: abilityFor(name) };
     saveProfile(profile);
     startPlacement();
   } else {
     skipTest();
   }
+}
+
+// ── Pronunciation (built-in speech synthesis, works offline with local voices) ──
+const speechReady = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+function speakWord(text) {
+  if (!speechReady || !text) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = SPEECH_LANG;
+    u.rate = 0.9;
+    const voice = speechSynthesis.getVoices().find((v) => v.lang && v.lang.startsWith(TARGET_LANG));
+    if (voice) u.voice = voice;
+    speechSynthesis.speak(u);
+  } catch {}
+}
+
+// ── Undo snackbar (replaces destructive confirm() dialogs) ──
+let snackbarTimer = null, snackbarAction = null;
+function showSnackbar(message, actionLabel, onAction, timeoutMs) {
+  const bar = $("snackbar");
+  $("snackbar-msg").textContent = message;
+  const btn = $("snackbar-action");
+  btn.textContent = actionLabel || "";
+  btn.classList.toggle("gone", !actionLabel);
+  snackbarAction = onAction || null;
+  bar.classList.remove("gone");
+  clearTimeout(snackbarTimer);
+  snackbarTimer = setTimeout(hideSnackbar, timeoutMs || 6000);
+}
+function hideSnackbar() {
+  clearTimeout(snackbarTimer);
+  snackbarAction = null;
+  $("snackbar").classList.add("gone");
+}
+// Clear a stored key with a 6-second undo instead of an OS confirm dialog.
+function clearWithUndo(key, message, rerender) {
+  const backup = store.getRaw(key);
+  store.remove(key);
+  rerender();
+  announce(message);
+  showSnackbar(message, "Undo", () => {
+    if (backup != null) store.setRaw(key, backup);
+    rerender();
+  });
+}
+
+// ── Backup / restore ──
+function exportProgress() {
+  const data = {};
+  for (const k of store.keys()) data[k] = store.getRaw(k);
+  const blob = new Blob([JSON.stringify({ app: STORE_PREFIX, version: APP_VERSION, data }, null, 2)],
+    { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = STORE_PREFIX + "-backup.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importProgress(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      const data = parsed && parsed.data;
+      if (!data || typeof data !== "object") throw new Error("bad file");
+      let n = 0;
+      for (const [k, v] of Object.entries(data)) {
+        if (k.startsWith(STORE_PREFIX) && typeof v === "string") { store.setRaw(k, v); n++; }
+      }
+      if (!n) throw new Error("no keys");
+      location.reload();
+    } catch {
+      showSnackbar("That file doesn't look like a backup from this app.");
+    }
+  };
+  reader.readAsText(file);
 }
 
 // ── Wiring ──
@@ -1086,9 +1363,14 @@ $("btn-next").addEventListener("click", nextQuestion);
 $("btn-dunno").addEventListener("click", () => lockAnswer(null, null));
 $("btn-reveal").addEventListener("click", showTranslations);
 $("btn-sentence").addEventListener("click", showSentence);
+$("btn-speak").addEventListener("click", () => {
+  if (round) speakWord(round.questions[round.index].nl);
+});
 
 $("btn-quit").addEventListener("click", () => {
-  if (confirm("Quit this round? Your progress will be lost.")) {
+  // Nothing answered yet → nothing to lose, don't nag.
+  const untouched = round && round.index === 0 && $("btn-next").classList.contains("hidden");
+  if (untouched || confirm("Quit this round? Your progress will be lost.")) {
     round = null;
     show("home");
   }
@@ -1126,17 +1408,44 @@ $("reg-name").addEventListener("keydown", (e) => {
 });
 
 $("btn-clear-scores").addEventListener("click", () => {
-  if (confirm("Delete all progress history for " + profile.name + "?")) {
-    localStorage.removeItem(scoresKey());
-    renderProgress();
-    renderHomeStats();
-  }
+  clearWithUndo(scoresKey(), "Progress history cleared", () => { renderProgress(); renderHomeStats(); });
 });
 $("btn-clear-mistakes").addEventListener("click", () => {
-  if (confirm("Delete all saved mistakes for " + profile.name + "?")) {
-    localStorage.removeItem(mistakesKey());
-    renderProgress();
-    renderHomeMistakes();
+  clearWithUndo(mistakesKey(), "Saved mistakes cleared", () => { renderProgress(); renderHomeMistakes(); });
+});
+$("snackbar-action").addEventListener("click", () => {
+  const act = snackbarAction;
+  hideSnackbar();
+  if (act) act();
+});
+$("btn-export").addEventListener("click", exportProgress);
+$("input-import").addEventListener("change", (e) => {
+  if (e.target.files && e.target.files[0]) importProgress(e.target.files[0]);
+  e.target.value = "";
+});
+
+// A fresh service worker announces its version after taking over; if it
+// doesn't match the page we're running, the user is one refresh behind.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (e) => {
+    const v = e.data && e.data.version;
+    if (v && v !== APP_VERSION) {
+      showSnackbar(`Update ready (v${v})`, "Refresh", () => location.reload(), 10000);
+    }
+  });
+}
+
+// Another tab (installed PWA + browser tab) may write our keys; re-read so
+// this tab doesn't overwrite fresher data with a stale in-memory copy.
+window.addEventListener("storage", (e) => {
+  if (!e.key || !e.key.startsWith(STORE_PREFIX)) return;
+  settings = store.get(SETTINGS_KEY) || {};
+  invalidatePools();
+  _seen = null;
+  if (profile && screens.home.classList.contains("active")) {
+    const fresh = loadProfile();
+    if (fresh && fresh.name === profile.name) profile = fresh;
+    applyProfile();
   }
 });
 
