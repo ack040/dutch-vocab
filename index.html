@@ -38,6 +38,8 @@
       <button class="btn btn-ghost" id="btn-skip-test" style="display:none">Skip test — start balanced</button>
       <button class="btn btn-ghost" id="btn-register-cancel" style="display:none">Cancel</button>
     </section>
+
+    <p class="word-count reg-version" id="reg-version"></p>
   </main>
 
   <!-- Home screen -->
@@ -196,7 +198,7 @@
 
   <!-- Version-keyed so the service worker can serve it cache-first: ~490KB
        that never re-downloads until the version actually changes. -->
-  <script src="data.js?v=1.12.0"></script>
+  <script src="data.js?v=1.12.1"></script>
   <script src="app.js"></script>
   <script>
     if ("serviceWorker" in navigator) {

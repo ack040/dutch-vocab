@@ -641,3 +641,6 @@ body {
 
 /* "Restore a backup" label styled as the button it acts as. */
 .btn-import { text-align: center; cursor: pointer; }
+
+/* Version line on the welcome screen sits below the form, not pinned. */
+.reg-version { margin-top: auto; padding-top: 12px; }
