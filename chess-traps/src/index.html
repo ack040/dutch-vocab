@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chess Opening Traps</title>
+<meta name="description" content="A library of 50 named chess opening traps. Enter the moves that were played and see which traps are still on the board, who blunders, and how to punish it.">
+<style>/*==CSS==*/</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>Chess Opening Traps</h1>
+    <span class="sub">Enter the moves as they are played. The list narrows to the traps that are still on.</span>
+  </header>
+
+  <nav class="tabs">
+    <button id="tab-explore" aria-selected="true">Explorer</button>
+    <button id="tab-library" aria-selected="false">Library</button>
+  </nav>
+
+  <section id="view-explore">
+    <div class="cols">
+      <div>
+        <div class="card">
+          <div class="board-wrap">
+            <div class="board" id="board"></div>
+            <div class="turn"><span id="turn-side"></span><span id="turn-ply"></span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Moves played</h2>
+          <div class="body"><div class="pgn" id="pgn"></div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>Enter a move</h2>
+          <div class="body">
+            <form class="entry" id="entry">
+              <input id="movein" placeholder="e4, Nf3, Bxf7+, O-O, e8=Q" autocomplete="off" autocapitalize="off" spellcheck="false">
+              <button class="btn primary" type="submit">Play</button>
+            </form>
+            <div class="err" id="err"></div>
+            <div class="hint" id="choices-hdr"></div>
+            <div class="choices" id="choices"></div>
+            <div class="hint">Standard algebraic notation. Long form like <b>e2e4</b> works too. Any legal move is accepted, including moves no trap uses.</div>
+            <div class="entry" style="margin-top:14px">
+              <button class="btn" id="undo" type="button">Undo</button>
+              <button class="btn" id="reset" type="button">Reset</button>
+              <button class="btn" id="flip" type="button">Flip board</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="alerts"></div>
+
+        <div class="card">
+          <h2 id="matchhdr">Traps</h2>
+          <div class="body"><div class="tlist" id="matches"></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-library" hidden>
+    <div class="filters">
+      <input type="search" id="search" placeholder="Search name, opening, ECO code or a move">
+      <span class="seg" id="seg">
+        <button data-side="all" aria-pressed="true">All</button>
+        <button data-side="w" aria-pressed="false">White traps</button>
+        <button data-side="b" aria-pressed="false">Black traps</button>
+      </span>
+      <span class="hint" id="libcount" style="margin:0"></span>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <footer class="foot">
+    Every line in this library was replayed and checked move by move: all moves are legal, every checkmate is a real checkmate, and the material counts are taken from the final position.
+  </footer>
+</div>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="v-name">
+    <header>
+      <div class="t">
+        <h2 id="v-name"></h2>
+        <div class="meta" id="v-meta"></div>
+      </div>
+      <button class="x" id="v-close" title="Close" aria-label="Close">&times;</button>
+    </header>
+    <div class="cols2">
+      <div class="left">
+        <div class="board" id="v-board"></div>
+        <div class="ctrls">
+          <button class="btn" id="v-start" type="button" title="Start">&#8676;</button>
+          <button class="btn" id="v-prev" type="button" title="Previous move">&#8592;</button>
+          <button class="btn" id="v-next" type="button" title="Next move">&#8594;</button>
+          <button class="btn" id="v-end" type="button" title="End">&#8677;</button>
+        </div>
+        <div class="movestrip" id="v-strip"></div>
+      </div>
+      <div class="right">
+        <div id="v-notes"></div>
+        <button class="btn primary" id="v-load" type="button" style="margin-top:16px">Load this line into the Explorer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>/*==ENGINE==*/</script>
+<script>/*==TRAPS==*/</script>
+<script>/*==APP==*/</script>
+</body>
+</html>
