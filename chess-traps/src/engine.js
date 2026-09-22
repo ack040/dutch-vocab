@@ -278,24 +278,92 @@
     return san;
   }
 
-  /* Accepts SAN with or without check/mate marks and !?/annotations. */
-  function sanToMove(st, san) {
-    var clean = String(san).replace(/[+#?!]/g, '').replace(/0/g, 'O').trim();
-    var moves = legalMoves(st);
-    for (var i = 0; i < moves.length; i++) {
-      if (moveToSan(st, moves[i]).replace(/[+#]/g, '') === clean) return moves[i];
+  /* Parses SAN (with or without +, #, !, ?), long algebraic (e2e4, e7e8q) and castling.
+     Tolerates what people type on phones: lowercase piece letters, 0-0, move numbers. */
+  var SAN_RE = /^([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(?:=?([NBRQnbrq]))?$/;
+  function matchSan(moves, clean) {
+    if (clean === 'O-O' || clean === 'O-O-O') {
+      var side = clean === 'O-O' ? 'k' : 'q';
+      for (var c = 0; c < moves.length; c++) if (moves[c].castle === side) return moves[c];
+      return null;
     }
-    /* tolerate a missing "=Q" on promotions and long algebraic input */
-    var lan = clean.match(/^([a-h][1-8])([a-h][1-8])([qrbn])?$/);
+    var lan = clean.match(/^([a-h][1-8])-?([a-h][1-8])=?([qrbnQRBN])?$/);
     if (lan) {
-      var f = nameToSq(lan[1]), t = nameToSq(lan[2]);
-      for (i = 0; i < moves.length; i++) {
-        if (moves[i].from === f && moves[i].to === t &&
-            (!moves[i].promotion || moves[i].promotion === (lan[3] || 'q'))) return moves[i];
+      var lf = nameToSq(lan[1]), lt = nameToSq(lan[2]), lp = lan[3] ? lan[3].toLowerCase() : null;
+      for (var l = 0; l < moves.length; l++) {
+        var lm = moves[l];
+        if (lm.from === lf && lm.to === lt && (!lm.promotion || lm.promotion === (lp || 'q'))) return lm;
       }
+      return null;
+    }
+    var m = clean.match(SAN_RE);
+    if (!m) return null;
+    var piece = m[1] ? m[1].toLowerCase() : 'p';
+    var fromFile = m[2] ? FILES.indexOf(m[2]) : -1;
+    var fromRank = m[3] ? 8 - parseInt(m[3], 10) : -1;
+    var to = nameToSq(m[5]);
+    var promo = m[6] ? m[6].toLowerCase() : null;
+    var found = null;
+    for (var i = 0; i < moves.length; i++) {
+      var mv = moves[i];
+      if (mv.piece !== piece || mv.to !== to) continue;
+      if (fromFile >= 0 && file(mv.from) !== fromFile) continue;
+      if (fromRank >= 0 && rank(mv.from) !== fromRank) continue;
+      if (mv.promotion && mv.promotion !== (promo || 'q')) continue;
+      if (!mv.promotion && promo) continue;
+      if (found) return null; /* ambiguous */
+      found = mv;
+    }
+    return found;
+  }
+  function sanToMove(st, san) {
+    var clean = String(san).trim()
+      .replace(/^\d+\s*\.+\s*/, '')      /* "3.Bc4", "3...Nf6" */
+      .replace(/[+#?!]/g, '')
+      .replace(/[oO0]-[oO0]-[oO0]/, 'O-O-O').replace(/[oO0]-[oO0]/, 'O-O')
+      .replace(/\s+/g, '');
+    if (!clean) return null;
+    var moves = legalMoves(st);
+    var mv = matchSan(moves, clean);
+    if (mv) return mv;
+    /* phone keyboards lowercase the piece letter; "b" stays a pawn file first, as SAN requires */
+    var first = clean[0];
+    if ('nrqk'.indexOf(first) >= 0 || first === 'b') {
+      mv = matchSan(moves, first.toUpperCase() + clean.slice(1));
+      if (mv) return mv;
     }
     return null;
   }
+
+  /* Position identity for transposition matching: placement, side to move, castling rights,
+     and the en passant square only when an en passant capture is actually available. */
+  function pieceChar(p) { return p.color === WHITE ? p.type.toUpperCase() : p.type; }
+  function castleStr(c) { return (c.wK ? 'K' : '') + (c.wQ ? 'Q' : '') + (c.bK ? 'k' : '') + (c.bQ ? 'q' : '') || '-'; }
+  function positionKey(st) {
+    var s = '';
+    for (var r = 0; r < 8; r++) {
+      for (var f = 0; f < 8; f++) { var p = st.board[r * 16 + f]; s += p ? pieceChar(p) : '.'; }
+    }
+    var ep = '-';
+    if (st.ep >= 0 && legalMoves(st).some(function (mv) { return mv.ep; })) ep = sqName(st.ep);
+    return s + ' ' + st.turn + ' ' + castleStr(st.castling) + ' ' + ep;
+  }
+  function fen(st) {
+    var rows = [];
+    for (var r = 0; r < 8; r++) {
+      var row = '', empty = 0;
+      for (var f = 0; f < 8; f++) {
+        var p = st.board[r * 16 + f];
+        if (!p) { empty++; continue; }
+        if (empty) { row += empty; empty = 0; }
+        row += pieceChar(p);
+      }
+      rows.push(row + (empty || ''));
+    }
+    return rows.join('/') + ' ' + st.turn + ' ' + castleStr(st.castling) + ' ' +
+      (st.ep >= 0 ? sqName(st.ep) : '-') + ' ' + st.half + ' ' + st.full;
+  }
+  function isMate(st) { return inCheck(st, st.turn) && legalMoves(st).length === 0; }
 
   function squares(st) {
     var out = [];
@@ -310,7 +378,8 @@
 
   root.Engine = {
     newGame: newGame, clone: clone, makeMove: makeMove, legalMoves: legalMoves,
-    moveToSan: moveToSan, sanToMove: sanToMove, inCheck: inCheck,
+    moveToSan: moveToSan, sanToMove: sanToMove, inCheck: inCheck, isMate: isMate,
+    positionKey: positionKey, fen: fen,
     squares: squares, sqName: sqName, nameToSq: nameToSq, findKing: findKing,
     WHITE: WHITE, BLACK: BLACK
   };

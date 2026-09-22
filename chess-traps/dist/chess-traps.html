@@ -4,22 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chess Opening Traps</title>
-<meta name="description" content="A library of 50 named chess opening traps. Enter the moves that were played and see which traps are still on the board, who blunders, and how to punish it.">
+<meta name="description" content="Fifty named chess opening traps, checked with Stockfish. Enter the moves of your game and see which of your traps are still on, when the opponent can go wrong, and how to punish it.">
+<meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101317" media="(prefers-color-scheme: dark)">
 <style>
 :root {
-  --bg: #f4f5f7; --panel: #ffffff; --ink: #14161a; --muted: #5d6470;
-  --line: #dfe3e8; --accent: #1f6feb; --accent-soft: #e7f0ff;
-  --light-sq: #ebecd0; --dark-sq: #739552; --mark: #f5d76e;
-  --white-trap: #2d6a4f; --black-trap: #1d3557;
-  --danger: #c1362f; --danger-soft: #fdecea; --ok: #2f7a4f;
+  --bg: #f4f5f7; --panel: #ffffff; --ink: #14161a; --muted: #5d6470; --line: #dfe3e8;
+  --accent: #1f6feb; --accent-soft: #e7f0ff; --accent-ink: #ffffff;
+  --good: #1f7a45; --good-soft: #e5f4ea; --bad: #c1362f; --bad-soft: #fdecea; --warn: #9a6400; --warn-soft: #fff4dc;
+  --light-sq: #ebecd0; --dark-sq: #739552; --last: rgba(245, 214, 70, .5); --sel: rgba(20, 85, 30, .5);
+  --arrow-good: #15803d; --arrow-bad: #dc2626; --arrow-info: #2563eb;
+  --tag-w: #2d6a4f; --tag-b: #1d3557;
   --radius: 10px; --shadow: 0 1px 2px rgba(20,22,26,.06), 0 4px 16px rgba(20,22,26,.06);
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #101317; --panel: #191d23; --ink: #e8eaed; --muted: #97a0ad;
-    --line: #2a3039; --accent: #6ea8ff; --accent-soft: #1b2a41;
-    --danger: #ff6b60; --danger-soft: #341c1a; --ok: #6fd39b;
+    --bg: #101317; --panel: #191d23; --ink: #e8eaed; --muted: #9aa3b0; --line: #2a3039;
+    --accent: #6ea8ff; --accent-soft: #1b2a41; --accent-ink: #0b1220;
+    --good: #6fd39b; --good-soft: #15291d; --bad: #ff7b72; --bad-soft: #341c1a; --warn: #f0b64a; --warn-soft: #33270f;
+    --tag-w: #3f8a67; --tag-b: #3a5a88;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+    color-scheme: dark;
   }
 }
 * { box-sizing: border-box; }
@@ -27,253 +33,369 @@ html, body { margin: 0; padding: 0; }
 body {
   background: var(--bg); color: var(--ink);
   font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
+  -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
 }
-.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+body.modal-open { overflow: hidden; }
+[hidden] { display: none !important; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 22px 16px 56px; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-header.top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
-header.top h1 { font-size: 21px; margin: 0; letter-spacing: -.01em; }
-header.top .sub { color: var(--muted); font-size: 13px; }
-
-.tabs { display: flex; gap: 6px; margin: 18px 0 20px; border-bottom: 1px solid var(--line); }
-.tabs button {
-  appearance: none; border: 0; background: none; color: var(--muted); cursor: pointer;
-  font: inherit; font-weight: 600; padding: 9px 14px; border-bottom: 2px solid transparent; margin-bottom: -1px;
-}
+/* ---- header ---- */
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+.brand { padding-bottom: 12px; }
+.brand h1 { font-size: 21px; margin: 0; letter-spacing: -.01em; }
+.brand .sub { color: var(--muted); font-size: 13px; }
+.tabs { display: flex; gap: 4px; }
+.tabs button { appearance: none; border: 0; background: none; color: var(--muted); cursor: pointer; font-weight: 600; padding: 9px 14px 11px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
 .tabs button:hover { color: var(--ink); }
 
-.cols { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 22px; align-items: start; }
-@media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
-
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
-.card + .card { margin-top: 16px; }
-.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0; padding: 13px 15px; border-bottom: 1px solid var(--line); }
-.card .body { padding: 15px; }
+/* ---- generic ---- */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); min-width: 0; }
+.card h2 { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0; padding: 12px 15px; border-bottom: 1px solid var(--line); }
+.card .body { padding: 14px 15px; }
+.muted { color: var(--muted); }
+.hint { color: var(--muted); font-size: 12.5px; margin: 10px 0 0; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { font-weight: 600; cursor: pointer; padding: 8px 13px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); line-height: 1.25; }
+.btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); color: var(--accent-ink); }
+.btn.ghost { background: none; }
+.btn.icon { padding: 6px 10px; font-size: 17px; line-height: 1; }
+.btn:disabled { opacity: .45; cursor: default; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
+.seg button { cursor: pointer; border: 0; background: var(--panel); color: var(--muted); padding: 7px 12px; font-size: 13.5px; font-weight: 600; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.tag { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; color: #fff; white-space: nowrap; display: inline-block; line-height: 1.5; }
+.tag.w { background: var(--tag-w); } .tag.b { background: var(--tag-b); }
+.tag.o { background: none; color: var(--muted); border: 1px solid var(--line); }
+.tag.o.mate { color: var(--bad); border-color: currentColor; }
+.tag.o.material { color: var(--good); border-color: currentColor; }
+.tag.o.attack { color: var(--warn); border-color: currentColor; }
+.tag.risky { background: none; color: var(--bad); border: 1px dashed currentColor; }
+.ext { display: inline-block; margin-top: 12px; font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600; }
+.ext:hover { text-decoration: underline; }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; cursor: pointer; user-select: none; }
+.chk input { width: 16px; height: 16px; accent-color: var(--accent); }
+.empty-note { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
 
 /* ---- board ---- */
-.board-wrap { padding: 15px; }
-.board { display: grid; grid-template-columns: repeat(8, 1fr); width: 100%; aspect-ratio: 1; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
-.sq { position: relative; display: flex; align-items: center; justify-content: center; }
+.board {
+  position: relative; display: grid; grid-template-columns: repeat(8, 1fr); width: 100%; aspect-ratio: 1;
+  border-radius: 6px; overflow: hidden; container-type: inline-size; user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.sq { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; }
 .sq.l { background: var(--light-sq); } .sq.d { background: var(--dark-sq); }
-.sq.from::after, .sq.to::after { content: ""; position: absolute; inset: 0; background: var(--mark); opacity: .5; }
-.sq .pc { position: relative; z-index: 1; font-size: clamp(22px, 7.2vw, 40px); line-height: 1; user-select: none; }
-@media (min-width: 861px) { .sq .pc { font-size: 38px; } }
-.sq .pc.w { color: #fff; text-shadow: 0 0 1px #222, 1px 0 0 #222, -1px 0 0 #222, 0 1px 0 #222, 0 -1px 0 #222; }
-.sq .pc.b { color: #1b1b1b; text-shadow: 0 0 1px #eee, 1px 0 0 rgba(255,255,255,.55), -1px 0 0 rgba(255,255,255,.55); }
-.sq .co { position: absolute; z-index: 2; font-size: 9px; font-weight: 700; opacity: .55; }
-.sq .co.f { right: 2px; bottom: 1px; } .sq .co.r { left: 2px; top: 1px; }
+.sq.from::after, .sq.to::after { content: ""; position: absolute; inset: 0; background: var(--last); }
+.sq.sel::after { content: ""; position: absolute; inset: 0; background: var(--sel); }
+.sq.hint::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 1.2cqi var(--arrow-info); }
+.sq.chk { background: radial-gradient(circle, #ff3b30 0%, #e0261c 30%, rgba(169,0,0,0) 72%), var(--light-sq); }
+.sq.d.chk { background: radial-gradient(circle, #ff3b30 0%, #e0261c 30%, rgba(169,0,0,0) 72%), var(--dark-sq); }
+.sq.tgt::before { content: ""; position: absolute; width: 28%; height: 28%; border-radius: 50%; background: rgba(20, 30, 20, .28); z-index: 2; }
+.sq.cap::before { content: ""; position: absolute; inset: 3%; border-radius: 50%; box-shadow: inset 0 0 0 .95cqi rgba(20, 30, 20, .32); z-index: 2; }
+.board.live .sq.own, .board.live .sq.tgt, .board.live .sq.cap { cursor: pointer; }
+.pc {
+  position: relative; z-index: 1; line-height: 1; font-size: 38px; font-size: 10.4cqi;
+  font-family: "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols 2", "DejaVu Sans", "Arial Unicode MS", sans-serif;
+  font-variant-emoji: text;
+}
+.pc.w { color: #fff; text-shadow: 0 0 1px #1a1a1a, 1px 0 0 #1a1a1a, -1px 0 0 #1a1a1a, 0 1px 0 #1a1a1a, 0 -1px 0 #1a1a1a, 0 2px 3px rgba(0,0,0,.25); }
+.pc.b { color: #151515; text-shadow: 0 0 1px rgba(255,255,255,.7), 0 2px 3px rgba(0,0,0,.2); }
+.co { position: absolute; z-index: 2; font-weight: 700; font-size: 10px; font-size: 2.3cqi; line-height: 1; opacity: .8; }
+.co.f { right: 3%; bottom: 3%; } .co.r { left: 3%; top: 3%; }
 .sq.l .co { color: var(--dark-sq); } .sq.d .co { color: var(--light-sq); }
+.arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
+.ar { opacity: .82; }
+.ar line { stroke-width: .17; stroke-linecap: round; }
+.ar.good line { stroke: var(--arrow-good); } .ar.good polygon { fill: var(--arrow-good); }
+.ar.bad line { stroke: var(--arrow-bad); } .ar.bad polygon { fill: var(--arrow-bad); }
+.ar.info line { stroke: var(--arrow-info); } .ar.info polygon { fill: var(--arrow-info); }
+.promo { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 2cqi; background: rgba(0,0,0,.4); }
+.promo button { width: 19cqi; height: 19cqi; border-radius: 12px; border: 0; background: var(--panel); cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,.35); padding: 0; }
+.promo button:hover { outline: 3px solid var(--accent); }
+.promo .pc { font-size: 15cqi; }
+.board.mini { border-radius: 4px; }
+.board.mini .pc { text-shadow: none; }
+.board.mini .pc.w { -webkit-text-stroke: .5px #1a1a1a; }
+.board.mini .ar line { stroke-width: .22; } .board.mini .ar { opacity: .9; }
 
-.turn { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; font-size: 13px; color: var(--muted); }
-.turn .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 1px solid #555; vertical-align: -1px; margin-right: 6px; }
-.turn .dot.w { background: #fff; } .turn .dot.b { background: #1b1b1b; }
-
-/* ---- move entry ---- */
+/* ---- explorer ---- */
+.xcols { display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.xcol { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.xboard { padding: 14px; }
+.bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.bar .lbl { font-size: 13px; color: var(--muted); font-weight: 600; }
+.bar .icon { margin-left: auto; }
+.status { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 11px; font-size: 13.5px; }
+.status .muted { font-size: 12.5px; white-space: nowrap; }
+.dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 1px solid #555; vertical-align: -1px; margin-right: 7px; }
+.dot.w { background: #fff; } .dot.b { background: #1b1b1b; }
+.nav { display: flex; gap: 8px; margin-top: 12px; }
+.nav .btn { flex: 1; padding: 8px 6px; }
 .entry { display: flex; gap: 8px; }
-.entry input {
-  flex: 1; min-width: 0; font: inherit; padding: 9px 11px; border-radius: 8px;
-  border: 1px solid var(--line); background: var(--bg); color: var(--ink);
-}
+.entry input { flex: 1; min-width: 0; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); }
 .entry input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
-button.btn {
-  font: inherit; font-weight: 600; cursor: pointer; padding: 9px 13px; border-radius: 8px;
-  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
-}
-button.btn:hover { border-color: var(--accent); color: var(--accent); }
-button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-button.btn.primary:hover { filter: brightness(1.08); color: #fff; }
-button.btn:disabled { opacity: .45; cursor: default; }
-button.btn:disabled:hover { border-color: var(--line); color: var(--ink); }
-
-.err { color: var(--danger); font-size: 13px; margin-top: 8px; min-height: 18px; }
-.hint { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
-
-.choices { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
-.choices .mv {
-  font: inherit; cursor: pointer; padding: 6px 10px; border-radius: 7px; line-height: 1.2;
-  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
-  font-variant-numeric: tabular-nums; display: inline-flex; align-items: baseline; gap: 6px;
-}
-.choices .mv:hover { border-color: var(--accent); background: var(--accent-soft); }
-.choices .mv b { font-weight: 700; }
-.choices .mv i { font-style: normal; font-size: 11px; color: var(--muted); }
-.choices .mv:hover i { color: var(--accent); }
-
-.pgn { font-variant-numeric: tabular-nums; font-size: 14px; line-height: 1.9; word-spacing: 2px; }
-.pgn .n { color: var(--muted); margin-left: 6px; }
-.pgn .n:first-child { margin-left: 0; }
-.pgn .m { cursor: pointer; padding: 1px 4px; border-radius: 4px; }
-.pgn .m:hover { background: var(--accent-soft); color: var(--accent); }
-.pgn .m.cur { background: var(--accent); color: #fff; }
+.err { color: var(--bad); font-size: 13px; margin-top: 6px; }
+.err:empty { display: none; }
+.choices { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+.choices:empty { display: none; }
+.mv { cursor: pointer; padding: 6px 10px; border-radius: 8px; line-height: 1.2; border: 1px solid var(--line); background: var(--panel); text-align: left; font-variant-numeric: tabular-nums; display: inline-flex; flex-direction: column; gap: 1px; max-width: 100%; }
+.mv b { font-weight: 700; font-size: 14.5px; }
+.mv i { font-style: normal; font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.mv:hover { border-color: var(--accent); background: var(--accent-soft); }
+.mv.good { border-color: var(--good); background: var(--good-soft); }
+.mv.good i { color: var(--good); font-weight: 600; }
+.mv.bad { border-color: var(--bad); background: var(--bad-soft); }
+.mv.bad i { color: var(--bad); }
+details.help { margin-top: 14px; font-size: 13.5px; border-top: 1px solid var(--line); padding-top: 10px; }
+details.help summary { cursor: pointer; color: var(--muted); font-weight: 600; font-size: 13px; }
+details.help ol { margin: 8px 0 0; padding-left: 20px; }
+details.help li { margin: 4px 0; }
+.xalerts:empty { display: none; }
+.alert { border: 1px solid var(--good); background: var(--good-soft); border-radius: var(--radius); padding: 13px 15px; box-shadow: var(--shadow); }
+.alert + .alert { margin-top: 10px; }
+.alert-h { font-weight: 700; color: var(--good); margin-bottom: 4px; }
+.alert p { margin: 0 0 10px; font-size: 14px; }
+.tlist { display: grid; gap: 8px; }
+.trap { width: 100%; text-align: left; cursor: pointer; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+.trap:hover { border-color: var(--accent); }
+.row1 { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.nm { font-weight: 650; }
+.row1 .nm { flex: 1 1 auto; min-width: 0; }
+.meta { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.st { font-size: 12.5px; margin-top: 5px; color: var(--muted); }
+.st.armed { color: var(--bad); font-weight: 600; }
+.st.sprung { color: var(--good); font-weight: 600; }
+.pgn { font-variant-numeric: tabular-nums; font-size: 14px; line-height: 1.95; }
+.pgn .n, .movestrip .n { color: var(--muted); margin: 0 3px 0 7px; }
+.pgn .n:first-child, .movestrip .n:first-child { margin-left: 0; }
+.pgn .m, .movestrip .m { font: inherit; border: 0; background: none; cursor: pointer; padding: 1px 4px; border-radius: 4px; color: inherit; }
+.pgn .m:hover, .movestrip button.m:hover { background: var(--accent-soft); color: var(--accent); }
+.pgn .m.cur, .movestrip .m.cur { background: var(--accent); color: var(--accent-ink); }
+.pgn .m.future { color: var(--muted); opacity: .75; }
 .pgn .empty { color: var(--muted); font-style: italic; }
 
-/* ---- trap list ---- */
-.alert { border: 1px solid var(--danger); background: var(--danger-soft); border-radius: var(--radius); padding: 13px 15px; margin-bottom: 16px; }
-.alert h3 { margin: 0 0 4px; font-size: 15px; color: var(--danger); }
-.alert p { margin: 0; font-size: 13.5px; }
-.alert .play { display: inline-block; margin-top: 9px; }
-
-.tlist { display: grid; gap: 9px; }
-.trap {
-  width: 100%; text-align: left; font: inherit; cursor: pointer; color: var(--ink);
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 11px 13px;
+@media (max-width: 860px) {
+  .xcols { display: flex; flex-direction: column; gap: 16px; }
+  .xcol { display: contents; }
+  .xboard { order: 1; } .xinput { order: 2; } .xalerts { order: 3; } .xtraps { order: 4; } .xmoves { order: 5; }
 }
-.trap:hover { border-color: var(--accent); }
-.trap .row1 { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.trap .nm { font-weight: 650; flex: 1 1 60%; min-width: 0; }
-.trap .meta { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
-.trap .st { font-size: 12px; margin-top: 6px; font-weight: 600; }
-.trap .st.armed { color: var(--danger); }
-.trap .st.sprung { color: var(--ok); }
-
-.tag { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; color: #fff; white-space: nowrap; }
-.tag.w { background: var(--white-trap); } .tag.b { background: var(--black-trap); }
-.tag.o { background: none; color: var(--muted); border: 1px solid var(--line); }
-
-.empty-note { color: var(--muted); font-size: 14px; padding: 6px 0 2px; }
-.empty-note b { color: var(--ink); }
 
 /* ---- library ---- */
-.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
-.filters input[type="search"] { flex: 1; min-width: 180px; font: inherit; padding: 8px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg button { font: inherit; font-size: 13px; cursor: pointer; border: 0; background: var(--panel); color: var(--muted); padding: 8px 12px; }
-.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: 11px; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.filters input[type="search"] { flex: 1 1 220px; min-width: 0; padding: 8px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); }
+.filters select { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); font-size: 13.5px; }
+.progress-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.progress-row .hint { margin: 0; white-space: nowrap; }
+.bar-track { flex: 1; height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.bar-fill { display: block; height: 100%; width: 0; background: var(--good); border-radius: 999px; transition: width .3s; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 11px; }
+.tcard { display: flex; gap: 12px; text-align: left; cursor: pointer; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; box-shadow: var(--shadow); align-items: flex-start; }
+.tcard:hover { border-color: var(--accent); }
+.tcard .board.mini { width: 104px; flex: none; }
+.tcard .tbody { min-width: 0; flex: 1; }
+.tcard .nm { margin-top: 5px; line-height: 1.3; }
+.tcard.is-learned { border-color: var(--good); }
+.tick { color: var(--good); font-weight: 800; margin-left: auto; }
 
 /* ---- viewer ---- */
-.overlay { position: fixed; inset: 0; background: rgba(10,12,16,.55); display: flex; align-items: flex-start; justify-content: center; padding: 20px 14px; overflow: auto; z-index: 50; }
-.overlay[hidden] { display: none; }
-.sheet { background: var(--panel); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.35); width: 100%; max-width: 900px; overflow: hidden; }
-.sheet header { display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
-.sheet header .t { flex: 1; min-width: 0; }
-.sheet header h2 { margin: 0 0 3px; font-size: 18px; }
-.sheet header .meta { color: var(--muted); font-size: 13px; }
-.sheet .cols2 { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 0; }
-@media (max-width: 760px) { .sheet .cols2 { grid-template-columns: 1fr; } }
-.sheet .left { padding: 16px; border-right: 1px solid var(--line); }
-@media (max-width: 760px) { .sheet .left { border-right: 0; border-bottom: 1px solid var(--line); } }
-.sheet .right { padding: 16px 18px; }
+.overlay { position: fixed; inset: 0; background: rgba(10,12,16,.58); display: flex; align-items: flex-start; justify-content: center; padding: 20px 12px; overflow: auto; z-index: 50; overscroll-behavior: contain; }
+.sheet { background: var(--panel); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.35); width: 100%; max-width: 940px; overflow: hidden; }
+.sheet header { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.sheet header .t { flex: 1 1 260px; min-width: 0; }
+.sheet header h2 { margin: 0 0 4px; font-size: 18px; }
+.sheet header .meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.x { font-size: 22px; line-height: 1; cursor: pointer; border: 0; background: none; color: var(--muted); padding: 4px 8px; border-radius: 6px; }
+.x:hover { background: var(--bg); color: var(--ink); }
+.cols2 { display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); }
+.cols2 .left { padding: 16px; border-right: 1px solid var(--line); }
+.cols2 .right { padding: 16px 18px; min-width: 0; }
+@media (max-width: 760px) {
+  .cols2 { grid-template-columns: 1fr; }
+  .cols2 .left { border-right: 0; border-bottom: 1px solid var(--line); }
+  .overlay { padding: 0; }
+  .sheet { border-radius: 0; min-height: 100%; }
+}
 .ctrls { display: flex; gap: 7px; margin-top: 12px; }
 .ctrls .btn { flex: 1; padding: 8px 0; }
-.note { border-left: 3px solid var(--accent); padding: 2px 0 2px 11px; margin: 12px 0; font-size: 14px; }
-.note.blunder { border-left-color: var(--danger); }
-.note.punish { border-left-color: var(--ok); }
-.sheet dl { margin: 14px 0 0; font-size: 14px; }
+#vQuizCtrls { margin-top: 12px; display: grid; gap: 8px; }
+.movestrip { font-variant-numeric: tabular-nums; font-size: 13.5px; line-height: 1.95; margin-top: 10px; }
+.movestrip .m.bl { color: var(--bad); font-weight: 700; }
+.movestrip .m.pu { color: var(--good); font-weight: 700; }
+.movestrip .m.cur.bl, .movestrip .m.cur.pu { color: var(--accent-ink); }
+.movestrip .m.q { color: var(--muted); }
+.lead { margin: 0 0 12px; font-size: 14.5px; }
+.note { border-left: 3px solid var(--accent); padding: 2px 0 2px 11px; margin: 0 0 12px; font-size: 14px; }
+.note.blunder { border-left-color: var(--bad); }
+.note.punish { border-left-color: var(--good); }
+.fb { border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-bottom: 12px; border: 1px solid var(--line); }
+.fb.ok { background: var(--good-soft); border-color: var(--good); }
+.fb.bad { background: var(--bad-soft); border-color: var(--bad); }
+.fb.warn { background: var(--warn-soft); border-color: var(--warn); }
+.fb.info { background: var(--accent-soft); border-color: var(--accent); }
+.sheet dl { margin: 4px 0 0; font-size: 14px; }
 .sheet dt { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; margin-top: 12px; }
 .sheet dd { margin: 3px 0 0; }
-.movestrip { font-variant-numeric: tabular-nums; font-size: 13.5px; line-height: 1.95; margin-top: 4px; }
-.movestrip .m { cursor: pointer; padding: 1px 4px; border-radius: 4px; }
-.movestrip .m:hover { background: var(--accent-soft); }
-.movestrip .m.cur { background: var(--accent); color: #fff; }
-.movestrip .m.bl { color: var(--danger); font-weight: 700; }
-.movestrip .m.pu { color: var(--ok); font-weight: 700; }
-.movestrip .n { color: var(--muted); margin-left: 5px; }
-.x { font: inherit; font-size: 20px; line-height: 1; cursor: pointer; border: 0; background: none; color: var(--muted); padding: 4px 6px; border-radius: 6px; }
-.x:hover { background: var(--bg); color: var(--ink); }
-footer.foot { margin-top: 32px; color: var(--muted); font-size: 12.5px; text-align: center; }
+.actions { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.actions .ext { margin: 0; }
+footer.foot { margin-top: 30px; color: var(--muted); font-size: 12.5px; text-align: center; line-height: 1.6; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <header class="top">
-    <h1>Chess Opening Traps</h1>
-    <span class="sub">Enter the moves as they are played. The list narrows to the traps that are still on.</span>
+    <div class="brand">
+      <h1>Chess Opening Traps</h1>
+      <span class="sub">Fifty traps for both colours, every line checked with Stockfish</span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button id="tab-explore" role="tab" aria-selected="true" aria-controls="view-explore">Explorer</button>
+      <button id="tab-library" role="tab" aria-selected="false" aria-controls="view-library">Library</button>
+    </nav>
   </header>
 
-  <nav class="tabs">
-    <button id="tab-explore" aria-selected="true">Explorer</button>
-    <button id="tab-library" aria-selected="false">Library</button>
-  </nav>
-
-  <section id="view-explore">
-    <div class="cols">
-      <div>
-        <div class="card">
-          <div class="board-wrap">
-            <div class="board" id="board"></div>
-            <div class="turn"><span id="turn-side"></span><span id="turn-ply"></span></div>
+  <section id="view-explore" role="tabpanel" aria-labelledby="tab-explore">
+    <div class="xcols">
+      <div class="xcol">
+        <div class="card xboard">
+          <div class="bar">
+            <span class="lbl">You play</span>
+            <span class="seg" id="sideSeg" role="group" aria-label="Your colour">
+              <button type="button" data-side="w" aria-pressed="true">White</button>
+              <button type="button" data-side="b" aria-pressed="false">Black</button>
+            </span>
+            <button type="button" class="btn ghost icon" id="flip" title="Flip the board" aria-label="Flip the board">&#8645;</button>
           </div>
+          <div id="board"></div>
+          <div class="status"><span id="turn"></span><span id="ply" class="muted"></span></div>
+          <div class="nav">
+            <button type="button" class="btn" id="back" title="Back one move (left arrow)">&#9664; Back</button>
+            <button type="button" class="btn" id="fwd" title="Forward one move (right arrow)">Forward &#9654;</button>
+            <button type="button" class="btn" id="reset">New game</button>
+          </div>
+          <p class="hint" id="undoHint" hidden>Tip: the arrow keys step back and forward. Entering a different move replaces what came after.</p>
         </div>
-        <div class="card">
-          <h2>Moves played</h2>
-          <div class="body"><div class="pgn" id="pgn"></div></div>
+
+        <div class="card xmoves">
+          <h2>Moves</h2>
+          <div class="body">
+            <div class="pgn" id="pgn"></div>
+            <a class="ext" id="xLichess" href="https://lichess.org/analysis" target="_blank" rel="noopener">Analyse this position on Lichess &#8599;</a>
+          </div>
         </div>
       </div>
 
-      <div>
-        <div class="card">
-          <h2>Enter a move</h2>
+      <div class="xcol">
+        <div class="card xinput">
+          <h2 id="inputHdr">Your move</h2>
           <div class="body">
-            <form class="entry" id="entry">
-              <input id="movein" placeholder="e4, Nf3, Bxf7+, O-O, e8=Q" autocomplete="off" autocapitalize="off" spellcheck="false">
+            <form class="entry" id="entry" autocomplete="off">
+              <input id="movein" aria-label="Move" placeholder="e4, Nf3, Bxf7+, O-O" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
               <button class="btn primary" type="submit">Play</button>
             </form>
-            <div class="err" id="err"></div>
-            <div class="hint" id="choices-hdr"></div>
+            <div class="err" id="err" role="alert"></div>
+            <div class="hint" id="choicesHdr"></div>
             <div class="choices" id="choices"></div>
-            <div class="hint">Standard algebraic notation. Long form like <b>e2e4</b> works too. Any legal move is accepted, including moves no trap uses.</div>
-            <div class="entry" style="margin-top:14px">
-              <button class="btn" id="undo" type="button">Undo</button>
-              <button class="btn" id="reset" type="button">Reset</button>
-              <button class="btn" id="flip" type="button">Flip board</button>
-            </div>
+            <details class="help">
+              <summary>How to use it</summary>
+              <ol>
+                <li>Pick your colour. Only traps <b>you</b> can spring are shown; nothing warns you about your own mistakes.</li>
+                <li>Enter every move as it is played: tap a piece and then its square, type it, or tap a suggested move.</li>
+                <li>Blue arrow: your book move. Red arrow: the losing move the opponent might play. Green arrow: the move that punishes it.</li>
+                <li>Traps are matched by position, so a different move order that reaches the same position still counts.</li>
+              </ol>
+            </details>
           </div>
         </div>
 
-        <div id="alerts"></div>
+        <div id="alerts" class="xalerts" aria-live="polite"></div>
 
-        <div class="card">
-          <h2 id="matchhdr">Traps</h2>
+        <div class="card xtraps">
+          <h2 id="matchHdr">Traps</h2>
           <div class="body"><div class="tlist" id="matches"></div></div>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="view-library" hidden>
+  <section id="view-library" role="tabpanel" aria-labelledby="tab-library" hidden>
     <div class="filters">
-      <input type="search" id="search" placeholder="Search name, opening, ECO code or a move">
-      <span class="seg" id="seg">
-        <button data-side="all" aria-pressed="true">All</button>
-        <button data-side="w" aria-pressed="false">White traps</button>
-        <button data-side="b" aria-pressed="false">Black traps</button>
+      <input type="search" id="search" placeholder="Search a name, opening, ECO code or move" aria-label="Search traps">
+      <span class="seg" id="libSide" role="group" aria-label="Side">
+        <button type="button" data-side="all" aria-pressed="true">All</button>
+        <button type="button" data-side="w" aria-pressed="false">White</button>
+        <button type="button" data-side="b" aria-pressed="false">Black</button>
       </span>
-      <span class="hint" id="libcount" style="margin:0"></span>
+      <select id="libOutcome" aria-label="Outcome">
+        <option value="all">Any outcome</option>
+        <option value="mate">Checkmate</option>
+        <option value="material">Wins material</option>
+        <option value="attack">Advantage</option>
+              </select>
+      <select id="libSort" aria-label="Sort">
+        <option value="eco">Sort by opening</option>
+        <option value="name">Sort by name</option>
+        <option value="short">Shortest first</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="libHide"> Hide learned</label>
     </div>
+    <div class="progress-row"><span class="hint" id="libcount"></span><span class="bar-track"><span class="bar-fill" id="progress"></span></span></div>
     <div class="grid" id="grid"></div>
   </section>
 
   <footer class="foot">
-    Every line in this library was replayed and checked move by move: all moves are legal, every checkmate is a real checkmate, and the material counts are taken from the final position.
+    Every line is replayed move by move for legality, and every trap was checked with Stockfish at depth 20.
+    Your colour, the game you are entering and the traps you have learned are kept in this browser only.
   </footer>
 </div>
 
 <div class="overlay" id="overlay" hidden>
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="v-name">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="vName">
     <header>
       <div class="t">
-        <h2 id="v-name"></h2>
-        <div class="meta" id="v-meta"></div>
+        <h2 id="vName"></h2>
+        <div class="meta" id="vMeta"></div>
       </div>
-      <button class="x" id="v-close" title="Close" aria-label="Close">&times;</button>
+      <span class="seg" id="vModes" role="group" aria-label="Mode">
+        <button type="button" data-mode="study" aria-pressed="true">Study</button>
+        <button type="button" data-mode="quiz" aria-pressed="false">Quiz me</button>
+      </span>
+      <button type="button" class="x" id="vClose" title="Close (Esc)" aria-label="Close">&times;</button>
     </header>
     <div class="cols2">
       <div class="left">
-        <div class="board" id="v-board"></div>
-        <div class="ctrls">
-          <button class="btn" id="v-start" type="button" title="Start">&#8676;</button>
-          <button class="btn" id="v-prev" type="button" title="Previous move">&#8592;</button>
-          <button class="btn" id="v-next" type="button" title="Next move">&#8594;</button>
-          <button class="btn" id="v-end" type="button" title="End">&#8677;</button>
+        <div id="vBoard"></div>
+        <div class="ctrls" id="vStudyCtrls">
+          <button type="button" class="btn" id="vStart" title="Start" aria-label="Start">&#8676;</button>
+          <button type="button" class="btn" id="vPrev" title="Previous move" aria-label="Previous move">&#8592;</button>
+          <button type="button" class="btn" id="vAuto" title="Play through" aria-label="Play through">&#9654;</button>
+          <button type="button" class="btn" id="vNext" title="Next move" aria-label="Next move">&#8594;</button>
+          <button type="button" class="btn" id="vEnd" title="End" aria-label="End">&#8677;</button>
         </div>
-        <div class="movestrip" id="v-strip"></div>
+        <div id="vQuizCtrls" hidden>
+          <form class="entry" id="qEntry" autocomplete="off">
+            <input id="qIn" aria-label="Your move" placeholder="Tap the board or type" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
+            <button class="btn primary" type="submit">Play</button>
+          </form>
+          <div class="row">
+            <button type="button" class="btn" id="qShow">Show the move</button>
+            <button type="button" class="btn" id="qRestart">Restart</button>
+          </div>
+        </div>
+        <div class="movestrip" id="vStrip"></div>
       </div>
       <div class="right">
-        <div id="v-notes"></div>
-        <button class="btn primary" id="v-load" type="button" style="margin-top:16px">Load this line into the Explorer</button>
+        <div id="vNotes"></div>
+        <div class="actions">
+          <button type="button" class="btn primary" id="vLoad">Load into the Explorer</button>
+          <label class="chk"><input type="checkbox" id="vLearned"> Learned</label>
+          <a class="ext" id="vLichess" href="https://lichess.org/analysis" target="_blank" rel="noopener">Analyse on Lichess &#8599;</a>
+        </div>
       </div>
     </div>
   </div>
@@ -560,24 +682,92 @@ footer.foot { margin-top: 32px; color: var(--muted); font-size: 12.5px; text-ali
     return san;
   }
 
-  /* Accepts SAN with or without check/mate marks and !?/annotations. */
-  function sanToMove(st, san) {
-    var clean = String(san).replace(/[+#?!]/g, '').replace(/0/g, 'O').trim();
-    var moves = legalMoves(st);
-    for (var i = 0; i < moves.length; i++) {
-      if (moveToSan(st, moves[i]).replace(/[+#]/g, '') === clean) return moves[i];
+  /* Parses SAN (with or without +, #, !, ?), long algebraic (e2e4, e7e8q) and castling.
+     Tolerates what people type on phones: lowercase piece letters, 0-0, move numbers. */
+  var SAN_RE = /^([NBRQK])?([a-h])?([1-8])?(x)?([a-h][1-8])(?:=?([NBRQnbrq]))?$/;
+  function matchSan(moves, clean) {
+    if (clean === 'O-O' || clean === 'O-O-O') {
+      var side = clean === 'O-O' ? 'k' : 'q';
+      for (var c = 0; c < moves.length; c++) if (moves[c].castle === side) return moves[c];
+      return null;
     }
-    /* tolerate a missing "=Q" on promotions and long algebraic input */
-    var lan = clean.match(/^([a-h][1-8])([a-h][1-8])([qrbn])?$/);
+    var lan = clean.match(/^([a-h][1-8])-?([a-h][1-8])=?([qrbnQRBN])?$/);
     if (lan) {
-      var f = nameToSq(lan[1]), t = nameToSq(lan[2]);
-      for (i = 0; i < moves.length; i++) {
-        if (moves[i].from === f && moves[i].to === t &&
-            (!moves[i].promotion || moves[i].promotion === (lan[3] || 'q'))) return moves[i];
+      var lf = nameToSq(lan[1]), lt = nameToSq(lan[2]), lp = lan[3] ? lan[3].toLowerCase() : null;
+      for (var l = 0; l < moves.length; l++) {
+        var lm = moves[l];
+        if (lm.from === lf && lm.to === lt && (!lm.promotion || lm.promotion === (lp || 'q'))) return lm;
       }
+      return null;
+    }
+    var m = clean.match(SAN_RE);
+    if (!m) return null;
+    var piece = m[1] ? m[1].toLowerCase() : 'p';
+    var fromFile = m[2] ? FILES.indexOf(m[2]) : -1;
+    var fromRank = m[3] ? 8 - parseInt(m[3], 10) : -1;
+    var to = nameToSq(m[5]);
+    var promo = m[6] ? m[6].toLowerCase() : null;
+    var found = null;
+    for (var i = 0; i < moves.length; i++) {
+      var mv = moves[i];
+      if (mv.piece !== piece || mv.to !== to) continue;
+      if (fromFile >= 0 && file(mv.from) !== fromFile) continue;
+      if (fromRank >= 0 && rank(mv.from) !== fromRank) continue;
+      if (mv.promotion && mv.promotion !== (promo || 'q')) continue;
+      if (!mv.promotion && promo) continue;
+      if (found) return null; /* ambiguous */
+      found = mv;
+    }
+    return found;
+  }
+  function sanToMove(st, san) {
+    var clean = String(san).trim()
+      .replace(/^\d+\s*\.+\s*/, '')      /* "3.Bc4", "3...Nf6" */
+      .replace(/[+#?!]/g, '')
+      .replace(/[oO0]-[oO0]-[oO0]/, 'O-O-O').replace(/[oO0]-[oO0]/, 'O-O')
+      .replace(/\s+/g, '');
+    if (!clean) return null;
+    var moves = legalMoves(st);
+    var mv = matchSan(moves, clean);
+    if (mv) return mv;
+    /* phone keyboards lowercase the piece letter; "b" stays a pawn file first, as SAN requires */
+    var first = clean[0];
+    if ('nrqk'.indexOf(first) >= 0 || first === 'b') {
+      mv = matchSan(moves, first.toUpperCase() + clean.slice(1));
+      if (mv) return mv;
     }
     return null;
   }
+
+  /* Position identity for transposition matching: placement, side to move, castling rights,
+     and the en passant square only when an en passant capture is actually available. */
+  function pieceChar(p) { return p.color === WHITE ? p.type.toUpperCase() : p.type; }
+  function castleStr(c) { return (c.wK ? 'K' : '') + (c.wQ ? 'Q' : '') + (c.bK ? 'k' : '') + (c.bQ ? 'q' : '') || '-'; }
+  function positionKey(st) {
+    var s = '';
+    for (var r = 0; r < 8; r++) {
+      for (var f = 0; f < 8; f++) { var p = st.board[r * 16 + f]; s += p ? pieceChar(p) : '.'; }
+    }
+    var ep = '-';
+    if (st.ep >= 0 && legalMoves(st).some(function (mv) { return mv.ep; })) ep = sqName(st.ep);
+    return s + ' ' + st.turn + ' ' + castleStr(st.castling) + ' ' + ep;
+  }
+  function fen(st) {
+    var rows = [];
+    for (var r = 0; r < 8; r++) {
+      var row = '', empty = 0;
+      for (var f = 0; f < 8; f++) {
+        var p = st.board[r * 16 + f];
+        if (!p) { empty++; continue; }
+        if (empty) { row += empty; empty = 0; }
+        row += pieceChar(p);
+      }
+      rows.push(row + (empty || ''));
+    }
+    return rows.join('/') + ' ' + st.turn + ' ' + castleStr(st.castling) + ' ' +
+      (st.ep >= 0 ? sqName(st.ep) : '-') + ' ' + st.half + ' ' + st.full;
+  }
+  function isMate(st) { return inCheck(st, st.turn) && legalMoves(st).length === 0; }
 
   function squares(st) {
     var out = [];
@@ -592,256 +782,300 @@ footer.foot { margin-top: 32px; color: var(--muted); font-size: 12.5px; text-ali
 
   root.Engine = {
     newGame: newGame, clone: clone, makeMove: makeMove, legalMoves: legalMoves,
-    moveToSan: moveToSan, sanToMove: sanToMove, inCheck: inCheck,
+    moveToSan: moveToSan, sanToMove: sanToMove, inCheck: inCheck, isMate: isMate,
+    positionKey: positionKey, fen: fen,
     squares: squares, sqName: sqName, nameToSq: nameToSq, findKing: findKing,
     WHITE: WHITE, BLACK: BLACK
   };
 })(typeof module !== 'undefined' && module.exports ? module.exports : (typeof window !== 'undefined' ? window : globalThis));
 </script>
 <script>
-/* White-side traps, part 1. Ply indexes are 0-based into `line`. */
+/* White-side traps. Ply indexes are 0-based into `line`; `blunder` is the opponent's losing move,
+   `punish` the refutation. Every line, marker and "better" suggestion was checked with Stockfish. */
 (function (root) {
   (root.TRAPS = root.TRAPS || []).push(
 
-  { id: 'scholars-mate', name: "Scholar's Mate", eco: 'C20', opening: "Bishop's Opening / Italian",
+  { id: 'scholars-mate', name: "Scholar's Mate", eco: 'C23', opening: "Bishop's Opening",
     side: 'w', outcome: 'mate',
     line: ['e4','e5','Bc4','Bc5','Qh5','Nf6','Qxf7#'],
     blunder: 5, punish: 6,
-    summary: 'The queen and bishop both hit f7, the only square defended solely by the black king. 3...Nf6 develops but ignores the threat and allows mate in one.',
-    better: '3...Qe7 or 3...Qf6 guards f7. After 3...Qe7 White has nothing and the early queen sortie just loses time.',
+    summary: 'Queen and bishop both hit f7, the square only the black king defends. 3...Nf6 develops a piece, ignores the threat and allows mate in one.',
+    better: '3...Qe7 or 3...Qf6 guards f7, and then the early queen sortie just costs White time.',
     notes: { 4: 'Qh5 attacks f7 and e5. Crude, but it punishes anyone who develops on autopilot.' } },
 
-  { id: 'legals-mate', name: "Légal's Mate", eco: 'C41', opening: 'Italian Game / Philidor',
+  { id: 'legals-mate', name: "Légal's Mate", eco: 'C50', opening: 'Italian Game',
     side: 'w', outcome: 'mate',
     line: ['e4','e5','Nf3','Nc6','Bc4','d6','Nc3','Bg4','h3','Bh5','Nxe5','Bxd1','Bxf7+','Ke7','Nd5#'],
     blunder: 11, punish: 12,
-    summary: 'White hangs the queen on purpose. Taking it costs Black the game: the bishop leaves f7 undefended and the knights deliver mate three moves later.',
-    better: '11...Nxe5! is correct. After 12.Qxh5 Nxc4 Black is a clean pawn up and White has nothing.',
-    notes: { 10: 'The point of the whole line. The knight on f3 was pinned, and White ignores the pin.',
-             12: 'Bxf7+ drags the king to e7 where the knight on d5 covers every escape square.' } },
+    summary: 'White hangs the queen on purpose. Taking it costs Black the game: the bishop leaves f7 undefended and the knights mate two moves later.',
+    better: '6...Nxe5 is the least bad, and even then 7.Qxh5 Nxc4 8.Qb5+ c6 9.Qxc4 leaves White a clean pawn up. The real error came a move earlier: 5...Bh5? keeps a pin that no longer works, where 5...Bxf3 6.Qxf3 was fine.',
+    notes: { 9: 'The first mistake. Keeping the pin looks natural but it allows the queen offer.',
+             10: 'The point of the line. The knight on f3 was pinned, and White simply ignores the pin.',
+             12: 'Bxf7+ drags the king to e7, where the knight on d5 covers every flight square.' } },
 
   { id: 'fried-liver', name: 'Fried Liver Attack', eco: 'C57', opening: 'Two Knights Defence',
     side: 'w', outcome: 'attack',
     line: ['e4','e5','Nf3','Nc6','Bc4','Nf6','Ng5','d5','exd5','Nxd5','Nxf7','Kxf7','Qf3+','Ke6','Nc3'],
     blunder: 9, punish: 10,
-    summary: 'Recapturing on d5 with the knight invites the sacrifice on f7. The black king is dragged to e6 where it sits in the middle of the board with no shelter.',
-    better: '9...Na5! (the Polerio Defence) is the main line. Black gives back the pawn but keeps the king safe, and the bishop on c4 is harassed.',
-    notes: { 10: 'Nxf7 is the sacrifice. Black must take, or he is simply down material for nothing.',
-             14: 'Nc3 piles on the pinned knight. Black holds material but the king is stuck on e6 for a long time.' } },
+    summary: 'Recapturing on d5 with the knight invites the sacrifice on f7. The king is dragged to e6 and stays in the middle of the board. The engine prefers White, though by less than its reputation: this is a practical attack, not a forced win.',
+    better: '5...Na5! (the Polerio Defence) is the main line. Black stays a pawn down but gains time on the bishop, and the engine rates it level.',
+    notes: { 10: 'The sacrifice. Stockfish rates it slightly above the Lolli Attack 6.d4. Black should take.',
+             12: 'Qf3+ forks the king and the pinned knight on d5.',
+             14: 'Nc3 piles up on d5. Black keeps the extra piece for now, but the king is stuck on e6.' } },
 
-  { id: 'retis-caro-mate', name: "Réti's Smothered Mate", eco: 'B10', opening: 'Caro-Kann Defence',
+  { id: 'retis-caro-mate', name: "Réti's Smothered Mate", eco: 'B17', opening: 'Caro-Kann Defence',
     side: 'w', outcome: 'mate',
     line: ['e4','c6','d4','d5','Nc3','dxe4','Nxe4','Nd7','Qe2','Ngf6','Nd6#'],
     blunder: 9, punish: 10,
-    summary: 'The quiet 5.Qe2 does nothing obvious, which is exactly why it works. The natural developing move 5...Ngf6 blocks the e-file and walks into mate on d6.',
-    better: '5...Ndf6! is the move. Developing the other knight keeps e7 covered and there is no trap.',
-    notes: { 8: 'Qe2 looks clumsy. It quietly puts the queen behind the e-pawn so Nd6 cannot be met by ...exd6.' } },
+    summary: 'The quiet 5.Qe2 does nothing obvious, which is exactly why it works. The natural developing move 5...Ngf6 walks into mate on d6: the e7 pawn is pinned by the queen, so it cannot take the knight.',
+    better: '5...Ndf6! develops the other knight and keeps d7 free for the king. Black is fine.',
+    notes: { 8: 'Qe2 looks clumsy. It quietly puts the queen on the e-file behind the e7 pawn.',
+             10: 'Mate. The king is boxed in by its own pieces and ...exd6 is illegal because of the pin.' } },
 
-  { id: 'damiano-refutation', name: 'Damiano Defence Refutation', eco: 'C40', opening: "King's Pawn / Damiano",
+  { id: 'damiano-refutation', name: 'Damiano Defence Punished', eco: 'C40', opening: 'Damiano Defence',
     side: 'w', outcome: 'material',
     line: ['e4','e5','Nf3','f6','Nxe5','fxe5','Qh5+','g6','Qxe5+','Qe7','Qxh8'],
-    blunder: 3, punish: 4,
-    summary: '2...f6 is one of the oldest bad moves in chess. The knight sacrifice on e5 cannot be declined safely, and the queen forks its way to h8.',
-    better: '2...Nc6 or 2...d6. Defending e5 with a pawn move that also blocks the bishop is the whole problem with 2...f6.',
-    notes: { 4: 'Nxe5 works precisely because 3...fxe5 opens the e-file and the h5-e8 diagonal at the same time.',
-             7: '4...g6 is forced. 4...Ke7 5.Qxe5+ walks into an even worse version.' } },
+    blunder: 5, punish: 6,
+    summary: '2...f6 is one of the oldest bad moves in chess, and 3.Nxe5! exploits it straight away. Taking the knight opens the e-file and the h5-e8 diagonal at once, and the queen forks her way to the rook on h8.',
+    better: '3...Qe7! is the only good defence: 4.Nf3 d5 5.d3 dxe4 6.dxe4 and White is better (about +1.6) but nothing is lost. Taking the knight is what loses.',
+    notes: { 3: 'Already a mistake: it weakens the king and takes f6 away from the knight.',
+             4: 'The knight offer. Black must not accept it.',
+             6: 'The queen check starts the collection. 4...Ke7 loses too.',
+             8: 'With check again, so there is never time to save the rook.' } },
 
-  { id: 'tennison-queen-trap', name: 'Tennison Gambit Queen Trap', eco: 'B00', opening: 'Tennison Gambit',
+  { id: 'tennison-queen-trap', name: 'Tennison Gambit Queen Trap', eco: 'B01', opening: 'Tennison Gambit',
     side: 'w', outcome: 'material',
     line: ['e4','d5','Nf3','dxe4','Ng5','Nf6','d3','exd3','Bxd3','h6','Nxf7','Kxf7','Bg6+','Kxg6','Qxd8'],
-    blunder: 13, punish: 14,
-    summary: 'Two pieces are thrown at the king to deflect it onto g6, where the queen on d8 falls with check gone. Taking the second bishop is the mistake.',
-    better: '13...Kg8! declines. After 14.Bxh6? gxh6 or 14.Qf3 Black holds, since the g6 bishop is hanging and the king is not on the d8-h4 line.',
-    notes: { 10: 'Nxf7 must be taken, otherwise White is just a piece up after Nxd8.',
-             12: 'Bg6+ is the real trap. It looks like a second free piece.' } },
+    blunder: 9, punish: 10,
+    summary: 'A trap out of a dubious gambit. After the automatic kick ...h6, White throws both minor pieces at f7 and g6 to drag the king onto g6, and the queen on d8 falls.',
+    better: '5...Nc6! (or 5...Nbd7) and Black is simply better: the Tennison Gambit is objectively about a pawn and a half down for White. Only 5...h6?? makes it work.',
+    notes: { 2: 'The gambit itself is unsound. Play it for the traps, knowing that.',
+             9: 'The losing move. It looks like it simply chases the knight away.',
+             10: 'The first sacrifice. Black has to take.',
+             12: 'The second sacrifice, and the point: the king is dragged to g6.',
+             13: 'Best in a lost position. 7...Kg8 and 7...Ke6 lose even more.' } },
 
   { id: 'qga-b5-trap', name: "Queen's Gambit Accepted: b5 Trap", eco: 'D20', opening: "Queen's Gambit Accepted",
     side: 'w', outcome: 'material',
-    line: ['d4','d5','c4','dxc4','e3','b5','a4','c6','axb5','cxb5','Qf3','Bb7','Qxb7','Nd7','Nc3'],
-    blunder: 5, punish: 8,
-    summary: 'Trying to hold the extra c4 pawn with ...b5 wrecks the queenside. After axb5 cxb5 the long diagonal is wide open and Qf3 hits b7 and a8 at once.',
-    better: '3...e6 or 3...Nf6. Black should give the pawn back and finish development. Holding c4 with ...b5 is the classic beginner greed here.',
-    notes: { 6: 'a4! immediately. Waiting one move lets Black consolidate with ...Bb7 or ...a6.',
-             10: 'Qf3 is the point. The b7 pawn is undefended and behind it sits the rook on a8.' } },
+    line: ['d4','d5','c4','dxc4','e3','b5','a4','c6','axb5','cxb5','Qf3','a6','Qxa8','Qc7','Qf3'],
+    blunder: 9, punish: 10,
+    summary: 'Trying to keep the c4 pawn with ...b5 and ...c6 falls apart after axb5. If Black recaptures with the c-pawn, the long diagonal from f3 to a8 is completely empty and the rook falls.',
+    better: '5...e6 and give the pawn back: 6.Bxc4 leaves White better (about +1.7) but nothing is lost outright. The plan of holding c4 with 3...b5 was the root problem; 3...e6 or 3...Nf6 is normal.',
+    notes: { 5: 'The greedy plan begins: Black tries to keep the extra pawn.',
+             6: 'Hitting the pawn chain at once.',
+             9: 'The losing recapture. b7, c6, d5 and e4 are all empty now.',
+             10: 'The rook on a8 is attacked and cannot be defended. 6...Bb7?? 7.Qxb7 is even worse.',
+             11: 'The engine’s choice: give up the rook and hope to trap the queen with ...Bb7.',
+             13: 'Threatening ...Bb7, so the queen comes home with the rook in the bag.' } },
 
-  { id: 'magnus-smith-trap', name: 'Magnus Smith Trap', eco: 'B57', opening: 'Sicilian Defence, Classical',
+  { id: 'magnus-smith-trap', name: 'Magnus Smith Trap', eco: 'B57', opening: 'Sicilian Defence, Sozin',
     side: 'w', outcome: 'material',
     line: ['e4','c5','Nf3','Nc6','d4','cxd4','Nxd4','Nf6','Nc3','d6','Bc4','g6','Nxc6','bxc6','e5','dxe5','Bxf7+','Kxf7','Qxd8'],
-    blunder: 11, punish: 12,
-    summary: 'With the bishop already on c4 and no black bishop on g7 yet, the fianchetto is one move too slow. Nxc6 followed by e5 rips open the a2-g8 diagonal.',
-    better: '11...e6! blunts the c4 bishop first. Only then is ...g6 and ...Bg7 playable.',
-    notes: { 12: 'Nxc6 first. The order matters: it forces bxc6 and removes the defender of e5.',
-             14: 'e5 attacks the f6 knight and opens the diagonal. Black is already lost.' } },
+    blunder: 15, punish: 16,
+    summary: 'Black grabs a pawn one move too late. After Nxc6 bxc6 e5!, the natural 8...dxe5?? opens the d-file and the a2-g8 diagonal together, and Bxf7+ deflects the king from the defence of the queen.',
+    better: '8...Ng4! (or 8...Nd7) and Black is only a little worse, about +0.5 for White. The fianchetto 6...g6 is playable; it is the capture on e5 that loses.',
+    notes: { 11: 'Playable, but it sets up the tactic: the bishop on c4 already eyes f7.',
+             12: 'First remove the knight that could come back to e5.',
+             14: 'Hitting the knight on f6 and inviting the capture.',
+             15: 'Opens the d-file. The queen on d8 is now defended only by the king.',
+             16: 'Deflection: the king must take, and the queen on d8 hangs.' } },
 
   { id: 'owens-defence-mate', name: "Owen's Defence Mate", eco: 'B00', opening: "Owen's Defence",
     side: 'w', outcome: 'mate',
     line: ['e4','b6','d4','Bb7','Bd3','f5','exf5','Bxg2','Qh5+','g6','fxg6','Nf6','gxh7+','Nxh5','Bg6#'],
-    blunder: 5, punish: 6,
-    summary: 'Black grabs on g2 and gets mated on the same diagonal. The discovered check on move 7 wins the queen, and the bishop finishes on g6 anyway.',
-    better: '3...e6 is normal. 3...f5 combined with grabbing g2 leaves the king with no cover at all.',
-    notes: { 8: 'Qh5+ is the move Black overlooks after grabbing the rook pawn cover.',
-             12: 'gxh7+ is a discovered check. Black must take the queen, and then Bg6 is mate.' } },
+    blunder: 11, punish: 12,
+    summary: '3...f5? and 4...Bxg2 rip open Black’s own king. The natural 6...Nf6??, attacking the queen, loses at once: gxh7 is a discovered check from the queen, and after the queen is taken Bg6 is mate.',
+    better: '6...Bg7 7.gxh7+ Kf8 gives up the exchange but avoids mate; White is still clearly winning (about +2.6). The real mistake was 3...f5?, where 3...e6 or 3...Nf6 is normal.',
+    notes: { 5: 'The first mistake: it opens the e8-h5 diagonal to the king.',
+             7: 'Grabbing the pawn and hitting the rook. Black is already in trouble.',
+             11: 'Attacking the queen, and walking into a discovered check.',
+             12: 'The pawn moves off the h5-e8 diagonal: check from the queen. Black takes the queen with the knight.',
+             14: 'Mate. The bishop checks through the empty f7 square and every flight square is covered or blocked.' } },
 
   { id: 'dutch-rh6-trap', name: 'Dutch Defence: Qxh5 Trap', eco: 'A80', opening: 'Dutch Defence',
     side: 'w', outcome: 'mate',
     line: ['d4','f5','Bg5','h6','Bh4','g5','Bg3','f4','e3','h5','Bd3','Rh6','Qxh5+','Rxh5','Bg6#'],
     blunder: 11, punish: 12,
-    summary: 'Black chases the bishop with pawns and wrecks the kingside. The rook lift to h6 looks like it defends h5, but it walks straight into a queen sacrifice and mate on g6.',
-    better: '11...Nf6 or 11...e6 and develop. Every pawn move from move 2 onward made this position worse.',
-    notes: { 8: 'e3! opens the queen path to h5 before Black can consolidate.',
-             12: 'Qxh5+ deflects the rook. Without the rook on h6, Bg6 is mate.' } },
+    summary: 'Black chases the bishop with pawns and strips the kingside bare. The rook lift to h6 looks like it covers everything, but a queen sacrifice deflects it and the bishop mates on g6.',
+    better: '6...d5 or 6...d6, and White is only somewhat better (about +1.1). Every pawn move from move 2 on made the position worse, but only 6...Rh6 loses.',
+    notes: { 7: 'Another pawn move that weakens the king further.',
+             8: 'Opens the d1-h5 diagonal for the queen.',
+             10: 'Aiming at g6. 6.Be2 is objectively a shade stronger, but this sets the trap.',
+             12: 'Deflection: the rook must take the queen, and g6 is no longer covered.',
+             14: 'Mate on the light squares.' } },
 
-  { id: 'greco-italian', name: 'Greco Attack (Italian)', eco: 'C54', opening: 'Italian Game, Giuoco Piano',
-    side: 'w', outcome: 'attack',
-    line: ['e4','e5','Nf3','Nc6','Bc4','Bc5','c3','Nf6','d4','exd4','cxd4','Bb4+','Nc3','Nxe4','O-O','Bxc3','d5','Bf6','Re1','Ne7','Rxe4'],
-    blunder: 13, punish: 14,
-    summary: 'Taking the e4 pawn and then grabbing on c3 is too greedy. White castles, plays d5 and the black pieces on the e-file get skewered by Re1.',
-    better: '13...d5! is the correct move, returning the pawn to free the position. Grabbing on c3 opens the b-file for nothing.',
-    notes: { 14: 'O-O! ignores the bishop. Development and the open e-file are worth more than a piece here.',
-             16: 'd5 kicks the knight and clears the way. Black cannot untangle.' } },
-
-  { id: 'petrov-nc6-fork', name: 'Petrov Defence: Nc6+ Trap', eco: 'C42', opening: 'Petrov / Russian Defence',
+  { id: 'petrov-nc6-fork', name: 'Petrov Defence: Nc6+ Trap', eco: 'C42', opening: 'Petrov Defence',
     side: 'w', outcome: 'material',
     line: ['e4','e5','Nf3','Nf6','Nxe5','Nxe4','Qe2','Nf6','Nc6+','Be7','Nxd8','Kxd8'],
     blunder: 7, punish: 8,
-    summary: 'The single most common Petrov mistake. Black copies White and recaptures on e4, then retreats the knight, forgetting that the queen on e2 is already lined up on the open e-file.',
-    better: '3...d6! first, kicking the knight, and only then ...Nxe4. The move order is the whole point of the Petrov.',
-    notes: { 6: 'Qe2 is the quiet trap move. It pins nothing yet, but the e-file is loaded.',
-             8: 'Nc6+ is a discovered check from the queen, and the knight simultaneously attacks the queen on d8.' } },
-
-  { id: 'frankenstein-dracula', name: 'Frankenstein-Dracula Variation', eco: 'C27', opening: 'Vienna Game',
-    side: 'w', outcome: 'material',
-    line: ['e4','e5','Nc3','Nf6','Bc4','Nxe4','Qh5','Nd6','Bb3','Nc6','Nb5','g6','Qf3','f5','Qd5','Qe7','Nxc7+','Kd8','Nxa8'],
-    blunder: 5, punish: 6,
-    summary: 'Grabbing the e4 pawn in the Vienna runs into Qh5, hitting e5 and f7 at once. Black survives the first wave but the knight raid on c7 collects the rook in the corner.',
-    better: '5...Nc6! or 5...Bc5 and simply develop. The e4 pawn is poisoned because the black knight has no good square after Qh5.',
-    notes: { 6: 'Qh5! double attack on e5 and f7. 6...Ng5 loses to d4, so the knight must go to d6.',
-             10: 'Nb5 targets c7 and d6. Black is already scrambling.',
-             16: 'Nxc7+ forks the king and the a8 rook. Note the black knight on a8 will be trapped afterwards, but a rook is a rook.' } }
-
-  );
-})(typeof module !== 'undefined' && module.exports ? module.exports : (typeof window !== 'undefined' ? window : globalThis));
-
-/* White-side traps, part 2. */
-(function (root) {
-  (root.TRAPS = root.TRAPS || []).push(
+    summary: 'The most common Petrov mistake. Black copies White and takes on e4, then retreats the knight, forgetting that the queen on e2 is lined up on the open e-file.',
+    better: '4...Qe7! 5.Qxe4 d6 wins the piece back because the knight on e5 is pinned; White is only slightly better. The root cause is 3...Nxe4?: the Petrov move order is 3...d6 4.Nf3 Nxe4.',
+    notes: { 6: 'The quiet trap move. It pins nothing yet, but the e-file is loaded.',
+             8: 'A discovered check from the queen, and the knight also attacks the queen on d8.' } },
 
   { id: 'monticelli-trap', name: 'Monticelli Trap', eco: 'E11', opening: 'Bogo-Indian Defence',
     side: 'w', outcome: 'material',
-    line: ['d4','Nf6','c4','e6','Nf3','Bb4+','Bd2','Bxd2+','Qxd2','b6','g3','Bb7','Bg2','O-O','Nc3','Ne4','Qc2','Nxc3','Ng5','g6','Bxb7','Nxe2','Kxe2','Nc6','Bxa8','Qxa8','Kf1'],
-    blunder: 17, punish: 18,
-    summary: 'Black grabs the knight on c3 and assumes the recapture is automatic. Instead Ng5 creates two threats at once: mate on h7 and the bishop on b7. Black cannot meet both.',
-    better: '17...d5! first, closing the long diagonal. Only then is the exchange on c3 safe.',
-    notes: { 18: 'Ng5! Not a recapture. The threats are Qxh7# and Bxb7, and stopping the mate costs the exchange.',
-             20: 'Bxb7 collects the bishop and then the rook on a8.' } },
+    line: ['d4','Nf6','c4','e6','Nf3','Bb4+','Bd2','Bxd2+','Qxd2','b6','g3','Bb7','Bg2','O-O','Nc3','Ne4','Qc2','Nxc3','Ng5','g6','Bxb7','Nxe2','Qxe2','Qxg5','Bxa8'],
+    blunder: 19, punish: 20,
+    summary: 'After 9...Nxc3 White does not recapture. 10.Ng5! threatens mate on h7 and the bishop on b7 at the same time, and the natural defence 10...g6?? stops the mate but loses the bishop and then the rook.',
+    better: '10...Qxg5! 11.Bxb7 Nc6 12.Bxa8 Nxe2 13.Qxe2 and Black has only given the exchange for a pawn (about +0.6 for White). 9...d5 avoids the whole business.',
+    notes: { 17: 'Black takes the knight and expects Qxc3.',
+             18: 'Not a recapture. The threats are Qxh7 mate and Bxb7.',
+             19: 'Stops the mate, ignores the bishop.',
+             20: 'The bishop falls, and the rook on a8 goes next.' } },
 
-  { id: 'elephant-refutation', name: 'Elephant Gambit Refutation', eco: 'C40', opening: 'Elephant Gambit',
+  { id: 'elephant-refutation', name: 'Elephant Gambit Punished', eco: 'C40', opening: 'Elephant Gambit',
     side: 'w', outcome: 'material',
     line: ['e4','e5','Nf3','d5','Nxe5','Bd6','d4','dxe4','Bc4','Bxe5','Qh5','g6','Qxe5+','Qe7','Qxh8'],
-    blunder: 9, punish: 10,
-    summary: '2...d5 is the Elephant Gambit. If Black tries to win the knight back with ...Bxe5, the queen lands on h5 hitting e5 and f7, and the rook on h8 falls.',
-    better: '9...Nf6 or 9...Ne7, leaving the knight on e5 alone. The bishop capture is exactly what White is hoping for.',
-    notes: { 10: 'Qh5! Double attack: the loose bishop on e5 and the f7 square.',
-             12: 'Qxe5+ comes with check, which is why Black never gets time to save the rook.' } },
+    blunder: 11, punish: 12,
+    summary: 'In the Elephant Gambit, winning the knight back with 5...Bxe5 is fine, but it lets the queen jump to h5 with a double attack on e5 and f7. Defending f7 with 6...g6?? leaves the bishop on e5 hanging with check, and the rook on h8 follows.',
+    better: '6...Qe7! 7.Qxe5 Qxe5 8.dxe5 Nc6 and White is only a little better (about +0.7).',
+    notes: { 3: 'The Elephant Gambit: objectively dubious, but tricky.',
+             10: 'Double attack: the bishop on e5 and the f7 square.',
+             11: 'Covers f7 but forgets the bishop.',
+             12: 'With check, so there is no time to save the rook.' } },
 
-  { id: 'opera-game', name: 'Opera Game Mate', eco: 'C41', opening: 'Philidor Defence',
-    side: 'w', outcome: 'mate',
-    line: ['e4','e5','Nf3','d6','d4','Bg4','dxe5','Bxf3','Qxf3','dxe5','Bc4','Nf6','Qb3','Qe7','Nc3','c6','Bg5','b5','Nxb5','cxb5','Bxb5+','Nbd7','O-O-O','Rd8','Rxd7','Rxd7','Rd1','Qe6','Bxd7+','Nxd7','Qb8+','Nxb8','Rd8#'],
-    blunder: 5, punish: 6,
-    summary: "Morphy's Opera Game, 1858. The pin with 3...Bg4 costs Black the bishop pair and then the game: every White move develops with a threat, and the finish is a textbook back rank mate.",
-    better: '5...exd4 or 5...Nd7. The pin on f3 achieves nothing once White can simply take on e5 and win the bishop.',
-    notes: { 12: 'Qb3! hits b7 and f7 at the same time. Black must defend passively.',
-             18: 'Nxb5! The sacrifice that opens the b-file and the d-file.',
-             30: 'Qb8+! The final deflection. The knight must take, and Rd8 is mate.' } },
-
-  { id: 'urusov-gambit', name: 'Urusov Gambit Attack', eco: 'C24', opening: "Bishop's Opening",
+  { id: 'caro-nxe6', name: 'Caro-Kann: Nxe6 Sacrifice', eco: 'B17', opening: 'Caro-Kann, Karpov Variation',
     side: 'w', outcome: 'attack',
-    line: ['e4','e5','Bc4','Nf6','d4','exd4','Nf3','Nxe4','Qxd4','Nf6','Bg5','Be7','Nc3','Nc6','Qh4','d6','O-O-O'],
-    blunder: 7, punish: 8,
-    summary: 'Taking on e4 hands White a massive lead in development. The queen recaptures on d4 in the centre with tempo and White castles long into a ready-made attack.',
-    better: '7...d5! is the correct reply, hitting the bishop on c4 and freeing the position before White gets organised.',
-    notes: { 8: 'Qxd4! The queen is safe here because the knight on e4 must retreat.',
-             16: 'O-O-O and every White piece is already pointing at the black king.' } },
-
-  { id: 'caro-nxe6', name: 'Caro-Kann: Nxe6 Sacrifice', eco: 'B17', opening: 'Caro-Kann, Steinitz',
-    side: 'w', outcome: 'attack',
-    line: ['e4','c6','d4','d5','Nc3','dxe4','Nxe4','Nd7','Ng5','Ngf6','Bd3','e6','N1f3','h6','Nxe6','fxe6','Bg6+','Ke7','O-O'],
+    line: ['e4','c6','d4','d5','Nc3','dxe4','Nxe4','Nd7','Ng5','Ngf6','Bd3','e6','N1f3','h6','Nxe6','fxe6','Bg6+','Ke7','Bf4','Qa5+','c3'],
     blunder: 13, punish: 14,
-    summary: 'The routine kick 7...h6 is the losing move. Nxe6 rips the king open, the check on g6 cuts the king off, and Black never gets to castle.',
-    better: '13...Bd6! develops and prepares to castle. The pawn on h6 does nothing and loses the only tempo Black had.',
-    notes: { 12: 'N1f3 brings the last piece up and makes Nxe6 possible.',
-             14: 'Nxe6! Black must take, since otherwise the queen falls.',
-             16: 'Bg6+ stops the king from running to f7 and keeps the rook on h8 buried.' } },
+    summary: 'The routine kick 7...h6? comes one move too early. Nxe6! tears the king open, the check on g6 drives it to e7, and Black never castles. Deep Blue beat Kasparov with this sacrifice in 1997.',
+    better: '7...Bd6! first: after 8.Qe2 h6 9.Ne4 Nxe4 10.Qxe4 the same ...h6 is perfectly fine, with White only about +0.5. Move order is everything here.',
+    notes: { 12: 'Brings the last piece up and makes the sacrifice on e6 possible.',
+             13: 'Kicking the knight one move too early.',
+             14: 'The sacrifice. Kasparov answered 8...Qe7 and lost in 19 moves.',
+             16: 'The king cannot go to f7, so it has to walk to e7.',
+             18: 'Every piece joins in; the black king is stuck in the centre.' } },
 
-  { id: 'pirc-bc4-trap', name: 'Pirc: Austrian Attack Bc4 Trap', eco: 'B09', opening: 'Pirc Defence, Austrian Attack',
-    side: 'w', outcome: 'material',
-    line: ['e4','d6','d4','Nf6','Nc3','g6','f4','Bg7','Nf3','O-O','e5','dxe5','dxe5','Nd5','Bc4','Nxc3','Bxf7+','Rxf7','Qxd8+','Bf8','bxc3'],
-    blunder: 13, punish: 14,
-    summary: 'Retreating the knight to d5 lands it on the same diagonal as the black king. Bc4 pins nothing yet, but after Nxc3 the sacrifice on f7 deflects the rook and the queen drops off.',
-    better: '13...Nfd7! is the move. The knight on d5 walks into Bc4 and there is no way to hold the position together.',
-    notes: { 14: 'Bc4! Black usually grabs on c3 here without seeing the follow-up.',
-             16: 'Bxf7+ deflects the rook away from the f8 square so that Qxd8 comes with check.' } },
-
-  { id: 'grunfeld-bxf7', name: 'Grünfeld: Bxf7+ Trick', eco: 'D87', opening: 'Grünfeld Defence, Exchange',
-    side: 'w', outcome: 'material',
-    line: ['d4','Nf6','c4','g6','Nc3','d5','cxd5','Nxd5','e4','Nxc3','bxc3','Bg7','Bc4','c5','Ne2','Nc6','Be3','O-O','O-O','Bg4','f3','Na5','Bxf7+','Rxf7','fxg4'],
-    blunder: 21, punish: 22,
-    summary: 'Black hits the bishop with ...Na5 while the bishop on g4 is still loose and f3 is already played. Bxf7+ removes the defender of the bishop with tempo.',
-    better: '21...Bd7 or 21...Be6 first. Leaving the bishop on g4 hanging while chasing the c4 bishop is the standard Grünfeld oversight.',
-    notes: { 20: 'f3 attacks the bishop. Black must deal with it before starting his own play.',
-             22: 'Bxf7+! In-between move. The rook must recapture, and only then does White take on g4.' } },
-
-  { id: 'latvian-refutation', name: 'Latvian Gambit Refutation', eco: 'C40', opening: 'Latvian Gambit',
-    side: 'w', outcome: 'attack',
-    line: ['e4','e5','Nf3','f5','Bc4','fxe4','Nxe5','Qg5','d4','Qxg2','Qh5+','g6','Bf7+','Kd8','Bxg6','Qxh1+','Ke2'],
-    blunder: 7, punish: 8,
-    summary: 'The Latvian is Black trying to be White. The double attack 4...Qg5 on e5 and g2 looks winning, but 5.d4! ignores it and after Qh5+ the black king is dragged out while the queen is stranded on h1.',
-    better: '7...Nf6 or 7...d6. The greedy 4...Qg5 is the move that loses on the spot.',
-    notes: { 8: 'd4! is the key move. White gives up the g2 pawn and the rook to open lines.',
-             10: 'Qh5+ starts the attack. Black has no way to block safely.',
-             16: 'Ke2 and the black queen on h1 is trapped while the king sits in the open.' } },
-
-  { id: 'halloween-gambit', name: 'Halloween Gambit', eco: 'C47', opening: 'Four Knights Game',
-    side: 'w', outcome: 'attack',
-    line: ['e4','e5','Nf3','Nc6','Nc3','Nf6','Nxe5','Nxe5','d4','Nc6','d5','Ne5','f4','Ng6','e5','Ng8','d6','cxd6','exd6','Qf6','Nb5'],
-    blunder: 7, punish: 8,
-    summary: 'White gives a whole knight on move four to chase the black pieces backwards with pawns. Objectively dubious, but in a blitz game Black is usually the one who cracks first.',
-    better: '7...Nxe5 is forced and fine. The real test is 9...Ng6 10.e5 Ng8 11.Bc4, where Black must find precise defence to keep the extra piece.',
-    notes: { 8: 'd4! The whole idea: the pawns roll forward and every black piece has to retreat.',
-             15: 'Ng8 and Black is fully developed backwards, which is exactly what White paid a knight for.' } },
-
-  { id: 'stafford-refutation', name: 'Stafford Gambit Refutation', eco: 'C42', opening: 'Stafford Gambit',
+  { id: 'stafford-refutation', name: 'Stafford Gambit Refuted', eco: 'C42', opening: 'Stafford Gambit',
     side: 'w', outcome: 'material',
     line: ['e4','e5','Nf3','Nf6','Nxe5','Nc6','Nxc6','dxc6','d3','Bc5','Be2','h5','c3','Ng4','d4'],
     blunder: 5, punish: 8,
-    summary: 'The antidote to all the Stafford traps. Do not grab the e5 pawn a second time, do not play Nc3, and do not touch anything on the kingside. Play d3, Be2, c3 and stay a pawn up.',
-    better: 'For Black there is nothing better. The Stafford is objectively unsound; it only works when White gets greedy or castles into the attack.',
-    notes: { 8: 'd3! The single most important move. It blunts the c8 bishop and covers e4 without weakening anything.',
-             10: 'Be2, not Bd3 or Bc4. Both of those walk into the standard Stafford tricks.',
-             12: 'c3 takes d4 and b4 away from the black pieces. White is simply a healthy pawn up.' } },
+    summary: 'The antidote to every Stafford trap. Do not grab e5 a second time, do not play Nc3 or Bg5, and do not castle into the attack. d3, Be2 and c3 keep White a healthy pawn up.',
+    better: '3...d6! 4.Nf3 Nxe4 5.d4 d5 is the normal Petrov and Black is fine. The Stafford is about a pawn and a half worse for Black against accurate play.',
+    notes: { 5: 'The Stafford Gambit. Objectively bad, but full of traps.',
+             8: 'The key move: it blunts the c8 bishop and covers e4 without weakening anything.',
+             10: 'Be2, not Bg5 or Bd3: those walk into the standard Stafford tricks.',
+             12: 'c3 takes d4 and b4 away from the black pieces.' } },
 
   { id: 'danish-qg5-trap', name: 'Danish Gambit: Qg5 Trap', eco: 'C21', opening: 'Danish Gambit',
     side: 'w', outcome: 'material',
-    line: ['e4','e5','d4','exd4','c3','dxc3','Bc4','cxb2','Bxb2','Qg5','Nf3','Qxg2','Rg1','Bb4+','Nbd2','Qh3','Bxf7+','Kxf7','Ng5+','Kf8','Nxh3'],
+    line: ['e4','e5','d4','exd4','c3','dxc3','Bc4','cxb2','Bxb2','Qg5','Nf3','Qxg2','Rg1','Bb4+','Nbd2','Qh3','Bxf7+','Kxf7','Ng5+','Ke8','Nxh3'],
     blunder: 9, punish: 10,
-    summary: 'Black takes both gambit pawns and then goes hunting for a third with the queen. White develops with tempo, sacrifices on f7 and the knight check on g5 forks the king and the queen.',
-    better: '9...d5! is the known equaliser: give the material back immediately and trade into a safe endgame. Chasing pawns with the queen loses.',
-    notes: { 10: 'Nf3 with tempo. Every White move from here comes with a threat.',
-             16: 'Bxf7+! The deflection. The king must take, and then Ng5+ forks.' } },
+    summary: 'Black takes both gambit pawns and then goes after a third with the queen. White develops with tempo, sacrifices on f7, and the knight check on g5 forks the king and the queen.',
+    better: '5...Nf6 or 5...Bb4+ and Black is fine, even slightly better with the extra pawns. Chasing the g2 pawn with the queen is what loses.',
+    notes: { 10: 'With tempo against the queen. From here every White move comes with a threat.',
+             11: 'The third pawn, and the queen is now far from home.',
+             16: 'Deflection: the king must take, and then Ng5+ forks king and queen.',
+             18: 'The fork. The queen on h3 is lost.' } },
 
-  { id: 'muzio-gambit', name: 'Muzio Gambit', eco: 'C37', opening: "King's Gambit Accepted",
+  { id: 'greco-game', name: 'Greco’s Mate (1619)', eco: 'C54', opening: 'Italian Game, Giuoco Piano',
+    side: 'w', outcome: 'mate',
+    line: ['e4','e5','Nf3','Nc6','Bc4','Bc5','c3','Nf6','d4','exd4','cxd4','Bb4+','Nc3','Nxe4','O-O','Nxc3','bxc3','Bxc3','Qb3','Bxa1','Bxf7+','Kf8','Bg5','Ne7','Ne5','Bxd4','Bg6','d5','Qf3+','Bf5','Bxf5','Bxe5','Be6+','Bf6','Bxf6','gxf6','Qxf6+','Ke8','Qf7#'],
+    blunder: 19, punish: 20,
+    summary: 'Gioachino Greco published this game four hundred years ago and players still fall for it. Black grabs the knight, the c3 pawn and then the rook on a1, while every White piece comes to the king.',
+    better: '10...d5! gives back material in time: 11.Qxc3 dxc4 and Black is fine (White about +0.6). Taking the rook on a1 is what loses.',
+    notes: { 17: 'Greedy. 9...d5 is the known safe move.',
+             18: 'Greco’s move sets the trap. 10.Ba3 is objectively even stronger.',
+             19: 'The rook grab. Now the attack on f7 decides.',
+             20: 'The king is driven to f8 and the bishops take over.',
+             38: 'Mate: the queen is protected by the bishop on e6.' } },
+
+  { id: 'tarrasch-trap', name: 'Tarrasch Trap', eco: 'C83', opening: 'Ruy Lopez, Open Defence',
+    side: 'w', outcome: 'material',
+    line: ['e4','e5','Nf3','Nc6','Bb5','a6','Ba4','Nf6','O-O','Nxe4','d4','b5','Bb3','d5','dxe5','Be6','c3','Be7','Re1','O-O','Nd4','Qd7','Nxe6','fxe6','Rxe4'],
+    blunder: 21, punish: 22,
+    summary: 'In the Open Ruy Lopez, 11...Qd7 looks like a normal developing move but it puts the queen on the d-file behind the d5 pawn. Nxe6 removes a defender, and Rxe4 wins the knight because ...dxe4 would drop the queen.',
+    better: '11...Nxe5! and the position is level. The queen does not belong on d7 while the d-file can open.',
+    notes: { 21: 'The mistake: the queen lines up behind the d5 pawn.',
+             22: 'First the bishop, the knight’s best defender.',
+             24: 'Wins the knight: 13...dxe4?? 14.Qxd7 loses the queen.' } },
+
+  { id: 'tarrasch-steinitz', name: 'Tarrasch Trap (Steinitz Defence)', eco: 'C62', opening: 'Ruy Lopez, Steinitz Defence',
+    side: 'w', outcome: 'material',
+    line: ['e4','e5','Nf3','Nc6','Bb5','d6','d4','Bd7','Nc3','Nf6','O-O','Be7','Re1','O-O','Bxc6','Bxc6','dxe5','dxe5','Qxd8','Raxd8','Nxe5','Bxe4','Nxe4','Nxe4','Nd3','f5','f3','Bc5+','Nxc5','Nxc5','Bg5','Rd5','Be7','Re8','c4','Kf7','cxd5'],
+    blunder: 13, punish: 14,
+    summary: 'The original Tarrasch Trap, from Tarrasch against Marco in 1892. Castling in the Steinitz Defence lets White win the e5 pawn by force, and the natural recaptures that follow cost Black the exchange as well.',
+    better: '7...exd4! (or 7...Nxd4) settles the centre first, and Black is fine. After 7...O-O White wins at least a pawn.',
+    notes: { 13: 'Castling looks obvious, but e5 cannot be held.',
+             14: 'Remove the defender of e5.',
+             20: 'The pawn falls, with an attack on the bishop.',
+             32: 'The bishop hits the rook on f8 and the knight on c5.',
+             34: 'The rook on d5 has no squares left.' } },
+
+  { id: 'french-bb5', name: 'French Advance: Bb5+ Queen Trap', eco: 'C02', opening: 'French Defence, Advance',
+    side: 'w', outcome: 'material',
+    line: ['e4','e6','d4','d5','e5','c5','c3','Nc6','Nf3','Qb6','Bd3','cxd4','cxd4','Nxd4','Nxd4','Qxd4','Bb5+','Bd7','Bxd7+','Kxd7','Qxd4'],
+    blunder: 15, punish: 16,
+    summary: 'Black wins the d4 pawn, trades knights and takes back on d4 with the queen. But the bishop on d3 was screening the queen on d1: Bb5+ comes with check and uncovers an attack on the black queen.',
+    better: '7...Bd7 is the normal move, and the position is level. After 7...Nxd4? 8.Nxd4 Black is already a piece for a pawn down; 8...Qxd4?? makes it a queen.',
+    notes: { 13: 'Already a mistake: after the knight trade d4 cannot be recaptured safely.',
+             15: 'The queen walks onto the d-file in front of White’s queen.',
+             16: 'Check, and a discovered attack on d4.',
+             18: 'Take on d7 first, with check, so the bishop is not lost.' } },
+
+  { id: 'nimzowitsch-mate', name: 'Nimzowitsch Defence: Bxd1 Mate', eco: 'B00', opening: 'Nimzowitsch Defence',
+    side: 'w', outcome: 'mate',
+    line: ['e4','Nc6','Nf3','d6','d4','Bg4','d5','Ne5','Nxe5','Bxd1','Bb5+','c6','dxc6','Qc7','cxb7+','Kd8','Nxf7#'],
+    blunder: 13, punish: 14,
+    summary: 'A Légal-style queen offer. After 5.Nxe5 Black is worse whatever happens, and taking the queen is actually the best try. But after the checks the natural 7...Qc7?? walks into a discovered check and mate by the knight.',
+    better: '7...a6! 8.c7+ axb5 9.cxd8=Q+ Rxd8 10.Nxf7 and Black survives, though White is better (about +1.2). The real mistake was 3...Bg4?, which lets d5 gain time.',
+    notes: { 5: 'Pinning the knight, but d5 comes with tempo.',
+             8: 'The queen offer again.',
+             10: 'Check, and the pawn on d5 is ready to take on c6.',
+             13: 'Natural, and losing: the queen leaves d8 and the king has nowhere to go.',
+             14: 'Discovered check from the bishop, and the pawn hits the rook.',
+             16: 'Mate: the knight on f7 checks and every flight square is covered.' } },
+
+  { id: 'hanham-qd5', name: 'Philidor: Qd5 Double Attack', eco: 'C41', opening: 'Philidor Defence, Hanham',
+    side: 'w', outcome: 'material',
+    line: ['e4','e5','Nf3','d6','d4','Nd7','Bc4','Be7','dxe5','dxe5','Qd5','Nh6','Bxh6','O-O','Be3'],
+    blunder: 9, punish: 10,
+    summary: 'In the Hanham Philidor, Black’s pieces block each other. After the exchange on e5 the queen jumps to d5 and threatens mate on f7; the only defence costs a piece.',
+    better: '5...Nc5 or 5...Nb6 keeps the damage to a small edge. The earlier 4...c6 is the book move; 4...Be7 already invites trouble.',
+    notes: { 7: 'Already inaccurate: f7 is short of defenders.',
+             9: 'Opens the d-file for White’s queen.',
+             10: 'Mate on f7 is threatened, and there is only one way to stop it.',
+             12: 'White is simply a piece up.' } },
+
+  { id: 'accelerated-dragon-bxf7', name: 'Accelerated Dragon: Bxf7+ Trap', eco: 'B35', opening: 'Sicilian, Accelerated Dragon',
+    side: 'w', outcome: 'material',
+    line: ['e4','c5','Nf3','Nc6','d4','cxd4','Nxd4','g6','Nc3','Bg7','Be3','Nf6','Bc4','O-O','Bb3','Na5','e5','Ne8','Bxf7+','Kxf7','Ne6','dxe6','Qxd8'],
+    blunder: 17, punish: 18,
+    summary: 'Black chases the bishop with ...Na5 and White answers by kicking the knight on f6. The retreat 9...Ne8?? runs into Bxf7+ and Ne6, which wins the queen whatever Black does.',
+    better: '9...Nxb3 10.exf6 Nxa1 11.fxg7 limits the damage (White about +1.4). Best was 8...d6 in the first place, keeping the knight on c6.',
+    notes: { 15: 'Premature: it lets White gain time with e5.',
+             17: 'The losing retreat.',
+             18: 'The king is dragged out.',
+             20: 'The knight attacks the queen and the king cannot take it: 11...Kxe6 12.Qd5+ is a forced mate.' } },
+
+  { id: 'slav-qb3', name: 'Slav: Qb3 and Bb5+', eco: 'D10', opening: 'Slav Defence',
+    side: 'w', outcome: 'material',
+    line: ['d4','d5','c4','c6','Nc3','Nf6','e3','Bf5','cxd5','cxd5','Qb3','b6','Bb5+','Nbd7','Nxd5','a6','Nxf6+','gxf6','Be2'],
+    blunder: 11, punish: 12,
+    summary: 'In the Slav, early ...Bf5 leaves b7 loose and Qb3 hits it. Defending with ...b6 weakens c6, and the bishop check pins the knight so that d5 falls.',
+    better: '6...Nc6! 7.Qxb7 Bd7 gives up b7 for fast development; the engine rates it close to level.',
+    notes: { 10: 'Hitting b7 and d5 at once.',
+             11: 'Covers b7 but loosens c6.',
+             12: 'After the knight blocks, d5 has lost a defender.',
+             14: 'The d5 pawn falls, and Black’s kingside is wrecked after the exchange on f6.' } },
+
+  { id: 'scandinavian-bishop-trap', name: 'Scandinavian: Bishop Trap', eco: 'B01', opening: 'Scandinavian Defence',
     side: 'w', outcome: 'attack',
-    line: ['e4','e5','f4','exf4','Nf3','g5','Bc4','g4','O-O','gxf3','Qxf3','Qf6','e5','Qxe5','Bxf7+','Kxf7','d4','Qxd4+','Be3'],
-    blunder: 7, punish: 8,
-    summary: 'White castles and lets the knight go, then throws the bishop in on f7 as well. Two pieces for a raging attack against a king stuck on f7 with no development.',
-    better: '7...Bg7 or 7...d5 instead of grabbing on f3. Once Black takes the knight the attack plays itself.',
-    notes: { 8: 'O-O! The knight on f3 is hanging and White just castles.',
-             14: 'Bxf7+ is the second sacrifice. Black is two pieces up and completely lost.' } }
+    line: ['e4','d5','exd5','Qxd5','Nc3','Qa5','d4','Nf6','Nf3','Bf5','Ne5','c6','g4','Be4','f3','Bg6','h4','Nd5','Bd2','f6','Nxg6','hxg6','Bd3'],
+    blunder: 15, punish: 16,
+    summary: 'The bishop on f5 gets chased with g4 and f3. Retreating to g6 lets h4-h5 trap it, and Black has to wreck the kingside to free it. White wins the bishop pair and a crushing position.',
+    better: '8...Bd5! keeps the bishop safe, and White is only about +1.0. The first slip was 7...Be4?; 7...Be6! was level.',
+    notes: { 12: 'Starting the hunt.',
+             13: 'Inaccurate: the bishop runs out of good squares.',
+             15: 'Now h4-h5 will trap it.',
+             16: 'The threat is h5, and Black has no good answer.',
+             20: 'White trades off the bishop and Black’s structure is ruined.' } }
 
   );
 })(typeof module !== 'undefined' && module.exports ? module.exports : (typeof window !== 'undefined' ? window : globalThis));
 
-/* Black-side traps, part 1. */
+/* Black-side traps. Same conventions as traps-white.js. */
 (function (root) {
   (root.TRAPS = root.TRAPS || []).push(
 
@@ -849,266 +1083,329 @@ footer.foot { margin-top: 32px; color: var(--muted); font-size: 12.5px; text-ali
     side: 'b', outcome: 'mate',
     line: ['e4','e5','Nf3','Nc6','Bc4','Nd4','Nxe5','Qg5','Nxf7','Qxg2','Rf1','Qxe4+','Be2','Nf3#'],
     blunder: 6, punish: 7,
-    summary: 'Black offers the e5 pawn with 3...Nd4. Grabbing it lets the queen out to g5 hitting g2 and the knight, and the mate on f3 is delivered by the knight that has been sitting on d4 all along.',
-    better: '6.Nxd4! exd4 7.O-O and White is simply better. Also fine is 6.c3 or 6.d3. The pawn on e5 is the bait.',
-    notes: { 7: 'Qg5! Double attack on g2 and the knight on f7-bound. White is already in trouble.',
-             13: 'Nf3# The knight, the queen on e4 and the bishop cover every square. The king never moved.' } },
+    summary: '3...Nd4 leaves e5 hanging on purpose. Taking it lets the queen out to g5, hitting g2 and the knight, and if White keeps grabbing, the knight that has been sitting on d4 delivers mate on f3.',
+    better: '4.Nxd4! exd4 5.O-O and White is clearly better (about +1.3): the gambit is objectively bad. After 4.Nxe5? Qg5, 5.O-O! limits the damage; only the greedy 5.Nxf7?? loses by force.',
+    notes: { 5: 'Objectively dubious: a practical trap, not a good move.',
+             7: 'Double attack on g2 and the knight on e5.',
+             8: 'The fatal greed. The fork on the rook looks tempting.',
+             13: 'Mate. The king never moved and every flight square is covered.' } },
 
-  { id: 'fishing-pole', name: 'Fishing Pole Trap', eco: 'C60', opening: 'Ruy Lopez',
+  { id: 'fishing-pole', name: 'Fishing Pole Trap', eco: 'C65', opening: 'Ruy Lopez, Berlin',
     side: 'b', outcome: 'mate',
     line: ['e4','e5','Nf3','Nc6','Bb5','Nf6','O-O','Ng4','h3','h5','hxg4','hxg4','Ne1','Qh4','f4','g3','d3','Qh1#'],
     blunder: 10, punish: 11,
-    summary: 'Black hangs the knight on g4 and offers it again with ...h5. Taking it opens the h-file straight at the White king, and the rook on h8 supports the queen landing on h1.',
-    better: '10.d3! or 10.c3, leaving the knight alone. The knight on g4 is poisoned precisely because taking it opens the h-file.',
-    notes: { 9: 'h5!! The fishing pole. The knight is offered a second time.',
-             15: 'g3! Stops White from blocking on g3 and sets up mate on h1.',
-             17: 'Qh1# The queen is defended by the rook down the open h-file, so the king cannot take.' } },
+    summary: 'Black puts a knight on g4 and offers it again with ...h5. Taking it opens the h-file straight at the White king, and the rook on h8 backs up the queen’s landing on h1.',
+    better: '6.d4! or 6.c3, leaving the knight alone: White is clearly better (about +1.8). Even after 6.hxg4? hxg4, 7.c3 is White’s best, and Black is still much better.',
+    notes: { 7: 'Objectively dubious: it only works if White takes the bait.',
+             9: 'The fishing pole. The knight is offered a second time.',
+             11: 'The h-file is open, and the rook on h8 is part of the attack.',
+             12: 'Too slow: the queen swings to h4 with mate threats.',
+             15: 'Stops White blocking with g3, and sets up mate on h1.',
+             17: 'Mate: the queen is defended by the rook down the open h-file.' } },
 
   { id: 'elephant-trap', name: 'Elephant Trap', eco: 'D51', opening: "Queen's Gambit Declined",
     side: 'b', outcome: 'material',
     line: ['d4','d5','c4','e6','Nc3','Nf6','Bg5','Nbd7','cxd5','exd5','Nxd5','Nxd5','Bxd8','Bb4+','Qd2','Bxd2+','Kxd2','Kxd8'],
     blunder: 10, punish: 11,
-    summary: 'The knight on f6 looks pinned against the queen, so Nxd5 looks like it wins a pawn. It does not: after Nxd5 Bxd8, the check on b4 wins the queen back and Black ends a piece up.',
-    better: '10.Bxf6 first, or simply 10.e3 and develop. The pin on f6 is an illusion because of the b4 check.',
-    notes: { 11: 'Nxd5! The whole point. Black ignores the "pin" because ...Bb4+ is coming.',
-             13: 'Bb4+ forces the queen trade on Black terms, and the bishop on d8 falls next.' } },
+    summary: 'The knight on f6 looks pinned against the queen, so Nxd5 seems to win a pawn. It does not: after 6...Nxd5! 7.Bxd8 the check on b4 wins the queen back, and Black ends a piece up.',
+    better: '6.e3 or 6.Nf3 and develop normally. The pin on f6 is an illusion because of the check on b4.',
+    notes: { 11: 'Black ignores the "pin": ...Bb4+ is coming.',
+             13: 'The check forces the queen into a trade on Black’s terms.',
+             17: 'Black collects the bishop and is a piece up.' } },
 
   { id: 'lasker-trap', name: 'Lasker Trap', eco: 'D08', opening: 'Albin Counter-Gambit',
     side: 'b', outcome: 'material',
     line: ['d4','d5','c4','e5','dxe5','d4','e3','Bb4+','Bd2','dxe3','Bxb4','exf2+','Ke2','fxg1=N+','Ke1','Qh4+','Kd2','Nc6'],
-    blunder: 6, punish: 7,
-    summary: 'The most famous underpromotion in opening theory. White tries to undermine the d4 pawn with e3 and gets a knight on g1 with check instead of a queen.',
-    better: '6.Nf3! is the main line. The move 4.e3 is the losing mistake, and 6.Bxb4 makes it worse.',
-    notes: { 11: 'exf2+ The pawn goes through to the seventh with check.',
-             13: 'fxg1=N+!! A queen would allow Rxg1. The knight comes with check and keeps the extra piece.',
-             15: 'Qh4+ and Black picks up more material with the double attack.' } },
+    blunder: 10, punish: 11,
+    summary: 'The most famous underpromotion in opening theory. White tries to break the d4 pawn with e3, then takes the bishop, and the pawn runs through to g1 and becomes a knight with check.',
+    better: '6.fxe3! Qh4+ 7.g3 Qe4 and the position is level. 4.e3 is already careless (4.Nf3 is normal), but only 6.Bxb4 loses.',
+    notes: { 6: 'Careless: it lets the d-pawn capture with tempo.',
+             10: 'The losing capture.',
+             11: 'The pawn reaches the seventh with check.',
+             13: 'A queen would allow Rxg1. The knight comes with check and keeps the material.',
+             15: 'The queen joins in with check; Black is a piece up with a raging attack.' } },
 
   { id: 'kieninger-trap', name: 'Kieninger Trap', eco: 'A52', opening: 'Budapest Gambit',
     side: 'b', outcome: 'mate',
     line: ['d4','Nf6','c4','e5','dxe5','Ng4','Bf4','Nc6','Nf3','Bb4+','Nbd2','Qe7','a3','Ngxe5','axb4','Nd3#'],
-    blunder: 12, punish: 13,
-    summary: 'White kicks the bishop with a3 and never gets to take it. Ngxe5 opens the e-file onto the White king and the knight lands on d3 as a smothered mate.',
-    better: '12.e3! first, giving the king an escape square, or 12.Qc2. The move a3 is one tempo too slow.',
-    notes: { 13: 'Ngxe5! Not the other knight. This one goes to d3.',
-             15: 'Nd3# The king on e1 is boxed in by its own pieces and the queen on e7 covers the e-file.' } },
+    blunder: 14, punish: 15,
+    summary: 'White kicks the bishop with a3 and Black ignores it. Taking the bishop with 8.axb4?? opens nothing for White and everything for Black: the knight lands on d3 with a smothered mate.',
+    better: '8.Nxe5! Nxe5 9.e3 and White is fine (about +0.4). The move a3 was not the mistake; greed on move 8 was.',
+    notes: { 13: 'Ignoring the attack on the bishop, and setting the trap.',
+             14: 'The losing capture.',
+             15: 'Mate. The king is boxed in by its own pieces and the queen on e7 covers the e-file.' } },
 
   { id: 'englund-trap', name: 'Englund Gambit Trap', eco: 'A40', opening: 'Englund Gambit',
     side: 'b', outcome: 'mate',
     line: ['d4','e5','dxe5','Nc6','Nf3','Qe7','Bf4','Qb4+','Bd2','Qxb2','Bc3','Bb4','Qd2','Bxc3','Qxc3','Qc1#'],
     blunder: 10, punish: 11,
-    summary: 'Black gives a pawn and sends the queen hunting on b2. 6.Bc3 looks like it traps the queen, but ...Bb4! pins the bishop and the mate on c1 works because White own pawns on c2, e2 and f2 seal the king in.',
-    better: '10.Nc3! defends b2 properly and the black queen is genuinely in danger. 6.Bc3 is the mistake.',
-    notes: { 11: 'Bb4! The pin. White cannot save both the bishop and the c1 square.',
-             15: 'Qc1# The queen on c3 cannot defend c1 because the c2 pawn is in the way.' } },
+    summary: 'Black gives a pawn and sends the queen hunting on b2. 6.Bc3 looks as if it traps the queen, but ...Bb4! pins the bishop, and the mate on c1 works because White’s own pawns on c2 and e2 seal the king in.',
+    better: '6.Nc3! defends everything and White is winning (about +2). The gambit itself is objectively poor; the trap is its only point.',
+    notes: { 1: 'Objectively dubious, but it sets this trap.',
+             10: 'The mistake: the bishop is overloaded.',
+             11: 'The pin. White cannot keep both the bishop and the c1 square.',
+             12: 'White is lost anyway; 7.Bd2 Qxa1 keeps the king safe but not the rook.',
+             15: 'Mate. The queen on c3 cannot defend c1 because the c2 pawn is in the way.' } },
 
   { id: 'siberian-trap', name: 'Siberian Trap', eco: 'B21', opening: 'Sicilian, Smith-Morra Gambit',
     side: 'b', outcome: 'mate',
     line: ['e4','c5','d4','cxd4','c3','dxc3','Nxc3','Nc6','Nf3','e6','Bc4','Qc7','O-O','Nf6','Qe2','Ng4','h3','Nd4','Nxd4','Qh2#'],
     blunder: 16, punish: 17,
-    summary: 'The standard Smith-Morra setup with ...Qc7 and ...Ng4. The natural kick 9.h3 loses on the spot to Nd4, because the queen on c7 is already aimed at h2.',
-    better: '16.g3! or 16.Rd1 first. The move h3 is exactly what Black is waiting for, since it never actually attacks the knight in time.',
-    notes: { 17: 'Nd4! The knight is taboo and the threat is Qh2 mate.',
-             19: 'Qh2# The knight on g4 defends the queen, so Kxh2 is not legal.' } },
+    summary: 'A standard Smith-Morra set-up with ...Qc7 and ...Ng4. The natural kick h3 loses on the spot to ...Nd4, because the queen on c7 is already aimed at h2.',
+    better: '9.Rd1! (or 9.Nb5) and the position is about level. Kicking the knight is exactly what Black is waiting for.',
+    notes: { 16: 'The losing move: it does not actually drive the knight away in time.',
+             17: 'The knight is taboo, and the threat is Qh2 mate.',
+             18: '10.hxg4 Nxe2+ saves the king but loses the queen.',
+             19: 'Mate: the knight on g4 defends the queen.' } },
 
   { id: 'mortimer-trap', name: 'Mortimer Trap', eco: 'C65', opening: 'Ruy Lopez, Berlin',
     side: 'b', outcome: 'material',
     line: ['e4','e5','Nf3','Nc6','Bb5','Nf6','d3','Ne7','Nxe5','c6','Bc4','Qa5+','Nc3','Qxe5'],
     blunder: 8, punish: 9,
-    summary: 'Black plays the odd-looking 4...Ne7, apparently hanging the e5 pawn. Taking it runs into ...c6 hitting the bishop, and the check on a5 picks the knight up.',
-    better: '8.O-O or 8.Nc3 and ignore the offer. The e5 pawn is not really free because of the ...c6 and ...Qa5+ combination.',
-    notes: { 9: 'c6! Attacking the bishop and clearing a5 for the queen at the same time.',
-             11: 'Qa5+ is the double attack. White must answer the check and the knight on e5 drops.' } },
+    summary: 'Black plays the odd-looking 4...Ne7, apparently dropping e5. Taking it runs into ...c6, hitting the bishop, and the queen check on a5 then picks up the knight.',
+    better: '5.d4, 5.Bc4 or 5.Nc3 and White is a little better (about +0.4). After 5.Nxe5? c6, 6.Nxf7 Kxf7 7.Bc4+ at least gets two pawns for the piece.',
+    notes: { 7: 'It looks like a mistake, and that is the point.',
+             9: 'Attacking the bishop and clearing a5 for the queen.',
+             11: 'The double attack: White must answer the check and the knight on e5 drops.' } },
 
   { id: 'stafford-bg4-mate', name: 'Stafford Gambit: Bg4 Mate', eco: 'C42', opening: 'Stafford Gambit',
     side: 'b', outcome: 'mate',
     line: ['e4','e5','Nf3','Nf6','Nxe5','Nc6','Nxc6','dxc6','d3','Bc5','Bg5','Nxe4','Bxd8','Bxf2+','Ke2','Bg4#'],
     blunder: 10, punish: 11,
     summary: 'The most common Stafford trap. White pins the knight with Bg5 and Black simply takes on e4. Winning the queen costs White the game two moves later.',
-    better: '10.Be3! or 10.Be2. The bishop on g5 walks into the standard Stafford combination.',
-    notes: { 11: 'Nxe4! Black ignores the pin. Taking the queen loses.',
-             13: 'Bxf2+ drags the king to e2.',
-             15: 'Bg4# The king on e2 has no squares: its own queen covers d1 and its own bishop covers f1.' } },
+    better: '6.Be2! and White is clearly better (about +1.8): the Stafford Gambit is objectively unsound. Only the pin 6.Bg5?? walks into this.',
+    notes: { 5: 'The Stafford Gambit: about a pawn and a half worse against accurate play.',
+             11: 'Black ignores the pin. Taking the queen loses.',
+             13: 'Drags the king to e2.',
+             15: 'Mate. The king’s own queen and bishop block d1 and f1.' } },
 
-  { id: 'stafford-h3-trap', name: 'Stafford Gambit: h3 Trap', eco: 'C42', opening: 'Stafford Gambit',
+  { id: 'stafford-queen-trick', name: 'Stafford Gambit: Bxf2+ Queen Trick', eco: 'C42', opening: 'Stafford Gambit',
     side: 'b', outcome: 'material',
     line: ['e4','e5','Nf3','Nf6','Nxe5','Nc6','Nxc6','dxc6','d3','Bc5','h3','Nxe4','dxe4','Bxf2+','Kxf2','Qxd1'],
-    blunder: 10, punish: 11,
-    summary: 'A single wasted tempo with h3 is enough. Nxe4! works because the bishop on c5 already eyes f2, and after the deflection the queen on d1 hangs.',
-    better: '10.Be2! and then O-O. Any slow move on the kingside in the Stafford runs into Nxe4 and Bxf2+.',
-    notes: { 11: 'Nxe4! Every Stafford trap runs through this square.',
-             13: 'Bxf2+ is the in-between move that deflects the king from the defence of d1.' } },
+    blunder: 14, punish: 15,
+    summary: 'Black sacrifices on e4 and then on f2 to expose the queen on d1. It only works if White recaptures on f2 with the king: then the d-file is open and the queen falls.',
+    better: '8.Ke2! keeps the queen, and White is clearly better (about +1.7). The sacrifice is a practical try, not a sound one.',
+    notes: { 11: 'A speculative sacrifice: it only pays if White plays the natural recapture later.',
+             13: 'The bishop check is the second offer.',
+             14: 'The losing capture: the king leaves the queen undefended on the open d-file.',
+             15: 'The queen is gone.' } },
 
   { id: 'froms-gambit-mate', name: "From's Gambit Mate", eco: 'A02', opening: "Bird's Opening",
     side: 'b', outcome: 'mate',
     line: ['f4','e5','fxe5','d6','exd6','Bxd6','Nc3','Qh4+','g3','Bxg3+','hxg3','Qxg3#'],
     blunder: 6, punish: 7,
-    summary: '1.f4 weakens the e1-h4 diagonal immediately. Any developing move that ignores the check on h4 loses, and here the bishop sacrifice on g3 opens the door.',
-    better: '6.Nf3! is the only move. It covers h4 and the whole gambit becomes playable for White.',
-    notes: { 7: 'Qh4+ The f4 pawn is gone, so the diagonal is wide open.',
-             9: 'Bxg3+ The sacrifice. Black is mating whether White takes or not.' } },
+    summary: '1.f4 weakens the e1-h4 diagonal from the first move. Any developing move that ignores ...Qh4+ loses, and here the bishop sacrifice on g3 opens the door.',
+    better: '4.Nf3! covers h4 and White is fine (about +0.4).',
+    notes: { 7: 'The f-pawn has gone, so the diagonal is wide open.',
+             9: 'The sacrifice. Black mates whether White takes or not.' } },
 
   { id: 'fools-mate', name: "Fool's Mate", eco: 'A00', opening: 'Barnes Opening',
     side: 'b', outcome: 'mate',
     line: ['f3','e5','g4','Qh4#'],
     blunder: 2, punish: 3,
-    summary: 'The fastest possible checkmate. Two pawn moves strip the e1-h4 diagonal and the queen walks in. Worth knowing purely to understand why f3 and g4 are bad squares.',
-    better: 'Almost anything. The pattern to remember is that moving the f-pawn and then the g-pawn opens a direct line to the king.',
-    notes: { 2: 'g4?? The second weakening move. g3 would have blocked the diagonal.' } },
+    summary: 'The fastest checkmate there is. Two pawn moves strip the e1-h4 diagonal and the queen walks in. Worth knowing only to understand why f3 and g4 are such bad squares.',
+    better: 'Almost anything. The pattern to remember: moving the f-pawn and then the g-pawn opens a direct line to the king.',
+    notes: { 2: 'The second weakening move. g3 would have blocked the diagonal.' } },
 
   { id: 'fajarowicz-trap', name: 'Fajarowicz Trap', eco: 'A51', opening: 'Budapest, Fajarowicz',
     side: 'b', outcome: 'material',
     line: ['d4','Nf6','c4','e5','dxe5','Ne4','a3','d6','exd6','Bxd6','g3','Nxf2','Kxf2','Bxg3+','Kxg3','Qxd1'],
     blunder: 10, punish: 11,
-    summary: 'The Fajarowicz knight sits on e4 doing nothing until White plays g3. Then Nxf2 and Bxg3+ strip the king and the queen on d1 falls.',
-    better: '10.e3! or 10.Nf3, keeping the kingside closed. The move g3 opens exactly the squares Black needs.',
-    notes: { 11: 'Nxf2! The king must take, since otherwise Black is just a pawn up with a raging attack.',
-             13: 'Bxg3+ The second sacrifice. After Kxg3 the queen on d1 is undefended.' } }
+    summary: 'The Fajarowicz knight sits on e4 doing apparently nothing until White plays g3. Then ...Nxf2 and ...Bxg3+ strip the king and the queen on d1 falls.',
+    better: '6.Qc2 or 6.Nd2, dealing with the knight on e4, and White is fine. The move g3 opens exactly the squares Black needs.',
+    notes: { 11: 'The king must take, or Black is a pawn up with a raging attack.',
+             13: 'The second sacrifice. After it the d-file is open to the queen on d1.',
+             14: '8.hxg3 loses the queen as well: the d-file is open either way.' } },
 
-  );
-})(typeof module !== 'undefined' && module.exports ? module.exports : (typeof window !== 'undefined' ? window : globalThis));
-
-/* Black-side traps, part 2. */
-(function (root) {
-  (root.TRAPS = root.TRAPS || []).push(
-
-  { id: 'noahs-ark', name: "Noah's Ark Trap", eco: 'C77', opening: 'Ruy Lopez',
+  { id: 'noahs-ark', name: "Noah's Ark Trap", eco: 'C71', opening: 'Ruy Lopez, Modern Steinitz',
     side: 'b', outcome: 'material',
     line: ['e4','e5','Nf3','Nc6','Bb5','a6','Ba4','d6','d4','b5','Bb3','Nxd4','Nxd4','exd4','Qxd4','c5','Qd5','Be6','Qc6+','Bd7','Qd5','c4','Bxc4','bxc4','Qxc4'],
     blunder: 14, punish: 15,
     summary: 'The oldest bishop trap in the Ruy Lopez. Black rolls the queenside pawns forward and the bishop on b3 runs out of squares: a4 is covered by the b-pawn and c4 is met by ...bxc4.',
-    better: '14.Nxd4! recapturing with the knight instead of the queen. Then the queen is not exposed to ...c5 and the bishop keeps a route home.',
-    notes: { 15: 'c5! Hitting the queen and starting the pawn net.',
-             21: 'c4! The pawns close in. The bishop on b3 has nowhere to go.' } },
+    better: '8.a4! (or the gambit 8.c3) and the game is level. Taking on d4 with the queen lets ...c5 and ...c4 trap the bishop.',
+    notes: { 15: 'Hitting the queen and starting the pawn net.',
+             21: 'The pawns close in. The bishop has nowhere to go.',
+             22: 'White gets two pawns for the bishop, which is not enough.' } },
 
-  { id: 'traxler', name: 'Traxler Counterattack', eco: 'C57', opening: 'Two Knights Defence',
-    side: 'b', outcome: 'attack',
-    line: ['e4','e5','Nf3','Nc6','Bc4','Nf6','Ng5','Bc5','Nxf7','Bxf2+','Kxf2','Nxe4+','Kg1','Qh4','g3','Nxg3','hxg3','Qxg3+','Kf1','Rf8'],
-    blunder: 8, punish: 9,
-    summary: 'Black ignores the attack on f7 entirely and plays 4...Bc5. If White grabs the rook with Nxf7, Black gives both bishop and knight to rip the king open. Objectively unclear, in practice terrifying.',
-    better: '8.Bxf7+! is the safe answer: Kf8 9.Bd5 and White keeps a small edge without any of the chaos.',
-    notes: { 9: 'Bxf2+! The counter-sacrifice. Black is playing for mate, not material.',
-             13: 'Qh4 brings the last attacker in. White is a rook up and completely lost.' } },
-
-  { id: 'scholars-refuted', name: "Scholar's Mate Refuted", eco: 'C20', opening: "Bishop's Opening",
+  { id: 'scholars-refuted', name: "Scholar's Mate Refuted", eco: 'C23', opening: "Bishop's Opening",
     side: 'b', outcome: 'material',
-    line: ['e4','e5','Bc4','Nc6','Qh5','g6','Qf3','Nf6','Qb3','Nd4','Bxf7+','Ke7','Qc4','b5','Qxb5','Nxc2+','Kd1','Nxa1'],
-    blunder: 10, punish: 11,
-    summary: 'How to punish the four move mate attempt. Block with ...g6, develop with tempo against the queen, and the knight on d4 ends up eating the rook on a1.',
-    better: '10.Qd1 or 10.Bd5 and retreat. Every White piece in this line is chasing material while Black develops with gain of time.',
-    notes: { 5: 'g6! Not ...Nf6, which allows Qxf7 mate. The pawn blocks the queen and gains a tempo.',
-             9: 'Nd4! Attacking the queen and heading for c2.',
-             13: 'b5! The final tempo. The knight on d4 is now free to fork.' } },
-
-  { id: 'danish-antidote', name: 'Danish Gambit Antidote', eco: 'C21', opening: 'Danish Gambit',
-    side: 'b', outcome: 'even',
-    line: ['e4','e5','d4','exd4','c3','dxc3','Bc4','cxb2','Bxb2','d5','Bxd5','Nf6','Bxf7+','Kxf7','Qxd8','Bb4+','Qd2','Bxd2+','Nxd2'],
-    blunder: 14, punish: 15,
-    summary: 'The Schlechter defence. Black takes both pawns and then hands one back with ...d5 at exactly the right moment. The check on b4 wins the queen straight back and the attack is gone.',
-    better: 'For White, 12.Nc3 or 12.Nf3 keeping the initiative. Going into the forced queen trade with Bxf7+ leads to a dry equal endgame.',
-    notes: { 9: 'd5! The key move. Give one pawn back to blunt the two bishops.',
-             15: 'Bb4+! This is why Black is not losing the queen for nothing.' } },
-
-  { id: 'scotch-ng5-trap', name: 'Scotch Gambit: Ng5 Trap', eco: 'C44', opening: 'Scotch Gambit',
-    side: 'b', outcome: 'material',
-    line: ['e4','e5','Nf3','Nc6','d4','exd4','Bc4','Bc5','Ng5','Nh6','Nxf7','Nxf7','Bxf7+','Kxf7'],
+    line: ['e4','e5','Bc4','Nc6','Qh5','g6','Qf3','Nf6','Qb3','Nd4','Bxf7+','Ke7','Qc4','b5','Qd3','Kxf7','Nf3','Nxf3+','Qxf3','d5'],
     blunder: 8, punish: 9,
-    summary: 'White goes for the f7 square too early. The modest 5...Nh6! defends f7 a second time, and the whole sacrifice just loses a piece for two pawns.',
-    better: '8.O-O or 8.c3 and play the gambit properly. Ng5 before Black has castled achieves nothing here.',
-    notes: { 9: 'Nh6! The only move, and it is enough. ...Qe7 or ...Qf6 would both be worse.',
-             13: 'Kxf7 and Black is a piece up. The king on f7 is safe because White has nothing left to attack with.' } },
-
-  { id: 'ruy-exchange-qd4', name: 'Ruy Lopez Exchange: Qd4', eco: 'C68', opening: 'Ruy Lopez, Exchange',
-    side: 'b', outcome: 'even',
-    line: ['e4','e5','Nf3','Nc6','Bb5','a6','Bxc6','dxc6','Nxe5','Qd4','Nf3','Qxe4+','Qe2','Qxe2+','Kxe2'],
-    blunder: 8, punish: 9,
-    summary: 'The e5 pawn in the Exchange Ruy looks free. It is not: ...Qd4! forks the knight on e5 and the pawn on e4, and Black regains everything by force.',
-    better: '8.O-O! is the main line. White plays for the better structure in the endgame, not for a pawn that cannot be held.',
-    notes: { 9: 'Qd4! The double attack. The knight on e5 has no good square that also defends e4.' } },
-
-  { id: 'vienna-qh4-rook', name: 'Vienna Gambit: Qh4+ Rook Grab', eco: 'C29', opening: 'Vienna Gambit',
-    side: 'b', outcome: 'material',
-    line: ['e4','e5','Nc3','Nf6','f4','d5','fxe5','Nxe4','Nxe4','Qh4+','g3','Qxe4+','Qe2','Qxh1'],
-    blunder: 8, punish: 9,
-    summary: 'The automatic recapture on e4 loses a rook. After f4 and the exchange on e5, the e1-h4 diagonal is open and the queen check picks up the knight and then the rook on h1.',
-    better: '8.Qf3! or 8.d3, dealing with the knight on e4 without opening the diagonal. Nxe4 is the move that loses.',
-    notes: { 9: 'Qh4+! The point. The f-pawn has left f2 so the diagonal is wide open.',
-             13: 'Qxh1 The g2 square was vacated by g3, so the rook in the corner is simply hanging.' } },
+    summary: 'How to punish the early queen raid. Block with ...g6, develop with gain of time, and when the queen goes to b3, ...Nd4 hits it and c2 at once. White is lost whatever happens next.',
+    better: '5.Ne2 and White is only a shade worse. The queen has already moved three times; a fourth trip to b3 is one too many.',
+    notes: { 5: 'Not ...Nf6, which allows Qxf7 mate. The pawn blocks and gains a tempo.',
+             8: 'The mistake: the queen walks into ...Nd4.',
+             9: 'Attacking the queen and heading for c2.',
+             13: 'Kicking the queen again. 8.Qxb5?? Nxb5 would lose it outright.',
+             15: 'Black is a piece up for a pawn with the better position.' } },
 
   { id: 'kg-qh4-rook', name: "King's Gambit: Qh4+ Rook Grab", eco: 'C30', opening: "King's Gambit Declined",
     side: 'b', outcome: 'material',
     line: ['e4','e5','f4','Bc5','fxe5','Qh4+','g3','Qxe4+','Qe2','Qxh1'],
     blunder: 4, punish: 5,
-    summary: 'Declining the King\'s Gambit with 2...Bc5 sets an immediate trap. Taking on e5 opens the diagonal to h4 and the same queen raid nets the rook on h1.',
-    better: '4.Nf3! is essential, covering h4 before anything else. Grabbing the e5 pawn loses material on the spot.',
-    notes: { 3: 'Bc5! The bishop takes g1 away from the king and makes ...Qh4+ permanently annoying.',
-             5: 'Qh4+ White cannot block on g3 without losing the h1 rook.' } },
-
-  { id: 'italian-fork-trick', name: 'Italian Game: Fork Trick', eco: 'C50', opening: 'Italian Game',
-    side: 'b', outcome: 'even',
-    line: ['e4','e5','Nf3','Nc6','Bc4','Nf6','Nc3','Nxe4','Nxe4','d5','Bd3','dxe4','Bxe4'],
-    blunder: 6, punish: 7,
-    summary: 'The standard equalising device against the Italian and the Vienna. Black gives a knight for a pawn and wins it straight back with ...d5, forking the bishop and the knight.',
-    better: '6.d3 or 6.O-O first. Once the knight sits on c3 and the bishop on c4, the fork trick is always available.',
-    notes: { 7: 'Nxe4! It looks like a blunder. The point is the next move.',
-             9: 'd5! Forking the bishop on c4 and the knight on e4. Black comes out level with a free centre.' } },
-
-  { id: 'four-knights-rubinstein', name: 'Four Knights: Rubinstein', eco: 'C48', opening: 'Four Knights Game',
-    side: 'b', outcome: 'even',
-    line: ['e4','e5','Nf3','Nc6','Nc3','Nf6','Bb5','Nd4','Nxe5','Qe7','Nf3','Nxb5','Nxb5','Qxe4+','Qe2','Qxe2+','Kxe2'],
-    blunder: 8, punish: 9,
-    summary: 'The Rubinstein Counter-Gambit. 4...Nd4! offers the e5 pawn, and taking it runs into ...Qe7 hitting the knight and the e-file at once. Everything comes back with interest.',
-    better: '8.Nxd4! exd4 9.e5 is the critical test. Grabbing on e5 hands Black an easy game.',
-    notes: { 7: 'Nd4! The knight steps into the middle of the board and is completely safe.',
-             9: 'Qe7! Pinning down the e-file. The knight on e5 has to go back.' } },
+    summary: 'Declining the King’s Gambit with 2...Bc5 sets an immediate trap. Taking on e5 opens the diagonal to h4, and the queen check picks up the pawn on e4 and then the rook on h1.',
+    better: '3.Nf3! covers h4 first and the position is level.',
+    notes: { 3: 'The bishop takes g1 away from the king and keeps ...Qh4+ in the air.',
+             5: 'White cannot block on g3 without loosening the long diagonal to h1.',
+             9: 'The rook in the corner falls.' } },
 
   { id: 'halloween-refuted', name: 'Halloween Gambit Refuted', eco: 'C47', opening: 'Four Knights Game',
     side: 'b', outcome: 'material',
-    line: ['e4','e5','Nf3','Nc6','Nc3','Nf6','Nxe5','Nxe5','d4','Ng6','e5','Ng8','Bc4','d5','Bxd5','c6','Bb3','Qe7'],
+    line: ['e4','e5','Nf3','Nc6','Nc3','Nf6','Nxe5','Nxe5','d4','Ng6','e5','Ng8','Bc4','d5','Bxd5','c6','Bb3','Be6','O-O','N8e7'],
     blunder: 6, punish: 9,
-    summary: 'How to keep the extra piece against the Halloween Gambit. Retreat the knight to g6, not c6 or d7, give back one pawn with ...d5 to kill the bishop, and consolidate.',
-    better: 'For White there is no improvement. 4.Nxe5 is simply unsound; the gambit relies entirely on Black panicking.',
-    notes: { 9: 'Ng6! The correct square. From c6 or d7 the knight gets chased again by d5 or e5.',
-             13: 'd5! Give one pawn back to blunt the bishop on c4 and finish development.' } },
+    summary: 'How to keep the extra piece against the Halloween Gambit. Retreat the knight to g6, not c6, give back one pawn with ...d5 to blunt the bishop, and finish development.',
+    better: 'For White, 4.Bb5 (the Spanish Four Knights) and the game is level. 4.Nxe5 is simply unsound: about a pawn and a half worse.',
+    notes: { 6: 'The Halloween Gambit: a whole knight for two pawns and some tempo.',
+             9: 'The right square. From c6 the knight gets chased again by d5.',
+             13: 'Give one pawn back to blunt the bishop.',
+             17: 'Developing with tempo against the bishop.' } },
 
-  { id: 'fried-liver-antidote', name: 'Fried Liver Antidote (Polerio)', eco: 'C58', opening: 'Two Knights Defence',
+  { id: 'cambridge-springs-trap', name: 'Cambridge Springs Trap', eco: 'D52', opening: "Queen's Gambit Declined, Cambridge Springs",
+    side: 'b', outcome: 'material',
+    line: ['d4','d5','c4','e6','Nc3','Nf6','Bg5','Nbd7','e3','c6','Nf3','Qa5','Bd3','Ne4','Qc2','Nxg5','Nxg5','dxc4','Bxc4','Qxg5'],
+    blunder: 14, punish: 15,
+    summary: 'In the Cambridge Springs the queen on a5 pins the knight on c3 and eyes the whole fifth rank. After 8.Qc2? the bishop on g5 simply falls, because the recapture Nxg5 leaves that knight hanging to the queen once ...dxc4 opens the rank.',
+    better: '8.Bxe4! dxe4 9.Ne5 and the game is level.',
+    notes: { 12: 'Slightly inaccurate; 7.Nd2 is the main line.',
+             14: 'Overlooks that the bishop on g5 is loose.',
+             15: 'Taking the bishop.',
+             17: 'Double attack: the pawn hits the bishop on d3 and the queen on a5 now sees g5.' } },
+
+  { id: 'italian-castle-fork', name: 'Italian Game: Castled into the Fork', eco: 'C50', opening: 'Giuoco Pianissimo',
     side: 'b', outcome: 'attack',
-    line: ['e4','e5','Nf3','Nc6','Bc4','Nf6','Ng5','d5','exd5','Na5','Bb5+','c6','dxc6','bxc6','Be2','h6','Nf3','e4','Ne5','Bd6'],
-    blunder: 6, punish: 9,
-    summary: 'The answer to the Fried Liver. Do not recapture on d5 with the knight. Play 5...Na5!, hitting the bishop, and accept being a pawn down for a big lead in development.',
-    better: 'For White, 6.d3 instead of 4.Ng5 avoids the whole thing. After 5...Na5 White is fighting for equality, not for an attack.',
-    notes: { 9: 'Na5! The bishop on c4 is the piece that makes Nxf7 work, so Black removes it first.',
-             17: 'e4! The pawns roll and White is still trying to finish development.' } }
+    line: ['e4','e5','Nf3','Nc6','Bc4','Bc5','d3','Nf6','Ng5','O-O','Nxf7','Rxf7','Bxf7+','Kxf7'],
+    blunder: 10, punish: 11,
+    summary: 'The Ng5-Nxf7 fork is every beginner’s first attacking idea. Once Black has castled it no longer works: Black gives the rook for knight and bishop, and two minor pieces are worth more than a rook and a pawn this early.',
+    better: '6.Nc3 or 6.O-O and the game is level. 5.Ng5 already wastes time.',
+    notes: { 8: 'The knight jump. It only works when f7 is defended just by the king.',
+             9: 'Castling: the rook now guards f7.',
+             10: 'The fork of queen and rook does not happen: the rook takes back.',
+             13: 'Black has two pieces for rook and pawn, and the better game.' } },
+
+  { id: 'colle-legal', name: 'Colle System: Légal in Reverse', eco: 'D04', opening: 'Colle System',
+    side: 'b', outcome: 'material',
+    line: ['d4','d5','Nf3','Nf6','e3','Bg4','Bd3','Nbd7','Nbd2','e5','dxe5','Nxe5','Nxe5','Bxd1','Kxd1'],
+    blunder: 12, punish: 13,
+    summary: 'The pin on f3 matters. After ...e5 and dxe5 Nxe5, the knight on f3 cannot take on e5 because it is pinned to the queen; without a Légal-style mate to follow, White simply loses the queen.',
+    better: '7.h3! and the position is level: White puts the question to the bishop first.',
+    notes: { 9: 'Striking in the centre.',
+             11: 'The knight joins the attack on f3.',
+             12: 'The pinned knight moves anyway.',
+             13: 'The queen falls. There is no mate for White this time.' } },
+
+  { id: 'jerome-refuted', name: 'Jerome Gambit Refuted', eco: 'C50', opening: 'Italian Game, Jerome Gambit',
+    side: 'b', outcome: 'material',
+    line: ['e4','e5','Nf3','Nc6','Bc4','Bc5','Bxf7+','Kxf7','Nxe5+','Nxe5','d4','Bxd4','Qxd4','Qf6'],
+    blunder: 6, punish: 7,
+    summary: 'The Jerome Gambit throws two pieces at f7 for two pawns and a queen fork. Simply take everything: after 6.d4 Bxd4 7.Qxd4 Qf6, Black is a piece up and the king is safe enough.',
+    better: '4.d3, 4.O-O or 4.c3 and the game is level. The bishop sacrifice has no follow-up.',
+    notes: { 6: 'The Jerome Gambit. It works only if Black panics.',
+             7: 'Take it.',
+             9: 'Take this one too.',
+             11: 'Returning a piece to keep things simple.',
+             13: 'Black is a piece up and the queen covers f7 and e5.' } },
+
+  { id: 'ruy-exchange-h5', name: 'Exchange Ruy: ...Bg4 and ...h5', eco: 'C69', opening: 'Ruy Lopez, Exchange',
+    side: 'b', outcome: 'mate',
+    line: ['e4','e5','Nf3','Nc6','Bb5','a6','Bxc6','dxc6','O-O','Bg4','h3','h5','hxg4','hxg4','Nxe5','Qh4','f3','g3','d4','Qh1#'],
+    blunder: 14, punish: 15,
+    summary: 'The Fishing Pole’s cousin in the Exchange Ruy Lopez. Black answers h3 with ...h5, offering the bishop. Taking it opens the h-file, and grabbing the e5 pawn as well lets the queen in for mate.',
+    better: '8.d3! and Black is only a little better (about +0.8). Best of all is 7.d3 without taking the bishop at all.',
+    notes: { 11: 'The offer. The bishop is taboo.',
+             12: 'Taking the bait: the h-file opens.',
+             14: 'The losing grab.',
+             15: 'Threatening Qh1 mate.',
+             17: 'Stops White from blocking with g3, and the queen goes to h1.',
+             19: 'Mate.' } },
+
+  { id: 'ponziani-qxc6', name: 'Ponziani: Qxc6? Bd7!', eco: 'C44', opening: 'Ponziani Opening',
+    side: 'b', outcome: 'attack',
+    line: ['e4','e5','Nf3','Nc6','c3','d5','Qa4','Nf6','Nxe5','Bd6','Nxc6','bxc6','d3','O-O','Qxc6','Bd7','Qa6','Rb8','Nd2','Re8'],
+    blunder: 14, punish: 15,
+    summary: 'White wins a pawn with Qxc6, and the queen ends up offside on a6 while every black piece comes into play with tempo. The engine rates Black clearly better despite the pawn.',
+    better: '8.Be2 or 8.Nd2 and develop; the game is level. Grabbing on c6 costs three tempi.',
+    notes: { 14: 'The pawn grab.',
+             15: 'Developing with tempo against the queen.',
+             17: 'Another tempo: the rook takes the b-file.',
+             19: 'Black is fully developed, White is not.' } },
+
+  { id: 'pianissimo-h5', name: 'Giuoco Pianissimo: ...g5 and ...h5', eco: 'C50', opening: 'Giuoco Pianissimo',
+    side: 'b', outcome: 'attack',
+    line: ['e4','e5','Nf3','Nc6','Bc4','Bc5','d3','Nf6','O-O','d6','Bg5','h6','Bh4','g5','Bg3','h5','Nxg5','h4','Nxf7','Qe7','Nxh8','hxg3','Kh1','Bxf2'],
+    blunder: 16, punish: 17,
+    summary: 'Black chases the pinning bishop with ...g5 and then offers the g5 pawn with ...h5. Taking it lets the h-pawn trap the bishop and open the h-file against the White king.',
+    better: '9.h4! stops ...h4 and the game is about level.',
+    notes: { 15: 'The offer: the g5 pawn is taboo.',
+             16: 'Taking it lets the h-pawn run.',
+             17: 'The bishop on g3 is trapped.',
+             19: 'Stronger than the classic 10...hxg3, which the engine rates as a serious mistake.',
+             23: 'The kingside is open and Black’s pieces are pouring in.' } },
+
+  { id: 'two-knights-canal-trap', name: 'Two Knights: Canal Trap', eco: 'C56', opening: 'Two Knights Defence, Canal Variation',
+    side: 'b', outcome: 'material',
+    line: ['e4','e5','Nf3','Nc6','Bc4','Nf6','d4','exd4','O-O','Nxe4','Re1','d5','Bxd5','Qxd5','Nc3','Qa5','Nxe4','Be6','Bg5','h6','Bh4','g5','Nf6+','Ke7','Nd5+','Qxd5'],
+    blunder: 24, punish: 25,
+    summary: 'In the Canal Variation, 10.Bg5?! pins nothing that matters. After ...h6 and ...g5 the knight check on f6 leaves it stranded, and the natural retreat with check drops the knight to the queen.',
+    better: '13.b4! deflects the queen and Black is only a little better (about +0.5). The main line is 10.Neg5, not 10.Bg5.',
+    notes: { 18: 'Inaccurate: it lets ...h6 and ...g5 gain time.',
+             21: 'Hitting the bishop again.',
+             22: 'The knight check, but f6 is a dead end.',
+             24: 'The losing check: d5 is covered by the queen on a5.',
+             25: 'Black is a piece up.' } }
 
   );
 })(typeof module !== 'undefined' && module.exports ? module.exports : (typeof window !== 'undefined' ? window : globalThis));
+
+/* Generated by tools/audit.js with Stockfish at depth 20. Scores are from the trapping side:
+   before = if the opponent finds the best move at the critical moment, after = right after their mistake,
+   final = at the end of the line. Numbers are centipawns; {mate:n} is mate in n; "#" is checkmate on the board. */
+(function (root) { root.TRAP_EVALS = {"scholars-mate":{"depth":20,"before":-6,"best":"Qe7","after":{"mate":1},"final":"#"},"legals-mate":{"depth":20,"before":187,"best":"Nxe5","after":{"mate":2},"final":"#"},"fried-liver":{"depth":20,"before":14,"best":"Na5","after":103,"final":97},"retis-caro-mate":{"depth":20,"before":22,"best":"Ndf6","after":{"mate":1},"final":"#"},"damiano-refutation":{"depth":20,"before":170,"best":"Qe7","after":333,"final":383},"tennison-queen-trap":{"depth":20,"before":-100,"best":"Nc6","after":292,"final":283},"qga-b5-trap":{"depth":20,"before":174,"best":"e6","after":368,"final":371},"magnus-smith-trap":{"depth":20,"before":53,"best":"Ng4","after":628,"final":618},"owens-defence-mate":{"depth":20,"before":242,"best":"Bg7","after":{"mate":2},"final":"#"},"dutch-rh6-trap":{"depth":20,"before":100,"best":"d5","after":{"mate":2},"final":"#"},"petrov-nc6-fork":{"depth":20,"before":70,"best":"Qe7","after":596,"final":629},"monticelli-trap":{"depth":20,"before":51,"best":"Ne4","after":442,"final":457},"elephant-refutation":{"depth":20,"before":83,"best":"Qe7","after":656,"final":688},"caro-nxe6":{"depth":20,"before":51,"best":"Bd6","after":128,"final":118},"stafford-refutation":{"depth":20,"before":46,"best":"d6","after":146,"final":259},"danish-qg5-trap":{"depth":20,"before":-57,"best":"Nf6","after":135,"final":744},"greco-game":{"depth":20,"before":96,"best":"d5","after":399,"final":"#"},"tarrasch-trap":{"depth":20,"before":-32,"best":"Nxe5","after":384,"final":389},"tarrasch-steinitz":{"depth":20,"before":26,"best":"exd4","after":113,"final":426},"french-bb5":{"depth":20,"before":315,"best":"Bc5","after":679,"final":683},"nimzowitsch-mate":{"depth":20,"before":132,"best":"a6","after":{"mate":2},"final":"#"},"hanham-qd5":{"depth":20,"before":224,"best":"Nh6","after":469,"final":463},"accelerated-dragon-bxf7":{"depth":20,"before":134,"best":"Nxb3","after":403,"final":412},"slav-qb3":{"depth":20,"before":33,"best":"Nc6","after":183,"final":227},"scandinavian-bishop-trap":{"depth":20,"before":100,"best":"Bd5","after":282,"final":320},"blackburne-shilling":{"depth":20,"before":-121,"best":"Nxd4","after":68,"final":"#"},"fishing-pole":{"depth":20,"before":-173,"best":"c3","after":271,"final":"#"},"elephant-trap":{"depth":20,"before":-34,"best":"e3","after":385,"final":337},"lasker-trap":{"depth":20,"before":16,"best":"fxe3","after":606,"final":588},"kieninger-trap":{"depth":20,"before":-32,"best":"Nxe5","after":{"mate":1},"final":"#"},"englund-trap":{"depth":20,"before":-200,"best":"Nc3","after":380,"final":"#"},"siberian-trap":{"depth":20,"before":-29,"best":"Nb5","after":339,"final":"#"},"mortimer-trap":{"depth":20,"before":-42,"best":"d4","after":130,"final":218},"stafford-bg4-mate":{"depth":20,"before":-171,"best":"Be2","after":364,"final":"#"},"stafford-queen-trick":{"depth":20,"before":-174,"best":"Ke2","after":477,"final":482},"froms-gambit-mate":{"depth":20,"before":-30,"best":"Nf3","after":{"mate":3},"final":"#"},"fools-mate":{"depth":20,"before":66,"best":"Nc3","after":{"mate":1},"final":"#"},"fajarowicz-trap":{"depth":20,"before":-17,"best":"Nd2","after":402,"final":563},"noahs-ark":{"depth":20,"before":-9,"best":"a4","after":249,"final":311},"scholars-refuted":{"depth":20,"before":30,"best":"Ne2","after":379,"final":402},"kg-qh4-rook":{"depth":20,"before":-2,"best":"Nf3","after":341,"final":358},"halloween-refuted":{"depth":20,"before":-8,"best":"d4","after":155,"final":94},"cambridge-springs-trap":{"depth":20,"before":-23,"best":"Bxe4","after":354,"final":414},"italian-castle-fork":{"depth":20,"before":41,"best":"Nc3","after":215,"final":229},"colle-legal":{"depth":20,"before":28,"best":"h3","after":438,"final":446},"jerome-refuted":{"depth":20,"before":-17,"best":"d3","after":254,"final":235},"ruy-exchange-h5":{"depth":20,"before":92,"best":"d3","after":{"mate":4},"final":"#"},"ponziani-qxc6":{"depth":20,"before":-28,"best":"Be2","after":210,"final":261},"pianissimo-h5":{"depth":20,"before":-34,"best":"h4","after":145,"final":136},"two-knights-canal-trap":{"depth":20,"before":47,"best":"b4","after":415,"final":434}}; })(typeof module !== 'undefined' && module.exports ? module.exports : (typeof window !== 'undefined' ? window : globalThis));
 </script>
 <script>
+/* Chess Opening Traps: explorer, library, viewer and quiz. */
 (function () {
   'use strict';
-  var E = window.Engine, TRAPS = window.TRAPS;
+  var E = window.Engine, TRAPS = window.TRAPS, EVALS = window.TRAP_EVALS || {};
   var GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+  /* U+FE0E asks for the text glyph. Without it iOS and Android draw the pawn as a colour emoji
+     that ignores CSS colour, so white pawns would come out black. */
+  var TEXT = '︎';
   var VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-  var OUTCOME = { mate: 'Checkmate', material: 'Wins material', attack: 'Winning attack', even: 'Full equality' };
+  var PIECE = { k: 'king', q: 'queen', r: 'rook', b: 'bishop', n: 'knight', p: 'pawn' };
+  var SIDE = { w: 'White', b: 'Black' };
+  var OUTCOME = { mate: 'Checkmate', material: 'Wins material', attack: 'Advantage', even: 'Equalises' };
   var $ = function (id) { return document.getElementById(id); };
 
-  TRAPS.sort(function (a, b) { return a.side === b.side ? a.name.localeCompare(b.name) : (a.side === 'w' ? -1 : 1); });
-  var BY_ID = {};
-  TRAPS.forEach(function (t) { BY_ID[t.id] = t; });
-
-  /* ---------- position helpers ---------- */
-  var cache = {};
-  function posAfter(line, n) {
-    var key = line.slice(0, n).join(' ');
-    if (cache[key]) return cache[key];
-    var st = E.newGame(), last = null;
-    for (var i = 0; i < n; i++) {
-      var mv = E.sanToMove(st, line[i]);
-      if (!mv) break;
-      last = mv;
-      st = E.makeMove(st, mv);
-    }
-    return (cache[key] = { st: st, last: last });
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
   }
+  function moveNo(ply) { return Math.floor(ply / 2) + 1; }
+  function label(ply, san) { return moveNo(ply) + (ply % 2 ? '...' : '.') + san; }
+  function mover(ply) { return ply % 2 ? 'b' : 'w'; }
+  function lichessUrl(st, side) {
+    return 'https://lichess.org/analysis/' + E.fen(st).replace(/ /g, '_') + (side === 'b' ? '?color=black' : '');
+  }
+  /* Engine score (centipawns, or {mate:n}) as the usual +1.4 / #3 notation. */
+  function evalText(v) {
+    if (v === null || v === undefined) return '';
+    if (v === '#') return 'mate';
+    if (typeof v === 'object') return (v.mate > 0 ? 'mate in ' : 'mated in ') + Math.abs(v.mate);
+    return (v > 0 ? '+' : v < 0 ? '−' : '') + (Math.abs(v) / 100).toFixed(1);
+  }
+
+  var store = {
+    get: function (k, d) {
+      try { var v = window.localStorage.getItem('chesstraps.' + k); return v === null ? d : JSON.parse(v); }
+      catch (e) { return d; }
+    },
+    set: function (k, v) {
+      try { window.localStorage.setItem('chesstraps.' + k, JSON.stringify(v)); } catch (e) { /* storage blocked */ }
+    }
+  };
+
+  /* ---------- trap data: replay every line once, index every position ---------- */
   function material(st) {
     var d = 0;
     for (var sq = 0; sq < 128; sq++) {
@@ -1118,295 +1415,705 @@ footer.foot { margin-top: 32px; color: var(--muted); font-size: 12.5px; text-ali
     }
     return d;
   }
-  function finalEdge(t) {
-    var d = material(posAfter(t.line, t.line.length).st) * (t.side === 'w' ? 1 : -1);
-    return d > 0 ? '+' + d : String(d);
+  var INDEX = {}, BY_ID = {};
+  TRAPS.forEach(function (t) {
+    BY_ID[t.id] = t;
+    t.states = [E.newGame()];
+    t.moves = [];
+    t.line.forEach(function (san, i) {
+      var mv = E.sanToMove(t.states[i], san);
+      t.moves.push(mv);
+      t.states.push(E.makeMove(t.states[i], mv));
+    });
+    t.states.forEach(function (st, k) {
+      var key = E.positionKey(st);
+      (INDEX[key] || (INDEX[key] = [])).push({ t: t, k: k });
+    });
+    t.edge = material(t.states[t.line.length]) * (t.side === 'w' ? 1 : -1);
+    t.ev = EVALS[t.id] || null;
+    /* risky: the set-up leaves the trapping side worse if the opponent finds the best move */
+    t.risky = !!(t.ev && typeof t.ev.before === 'number' && t.ev.before < -50);
+  });
+
+  function edgeText(n) { return n > 0 ? '+' + n : n < 0 ? '−' + (-n) : '0'; }
+  function outcomeLine(t) {
+    if (t.outcome === 'mate') return 'Checkmate for ' + SIDE[t.side] + '.';
+    if (t.outcome === 'material') return SIDE[t.side] + ' comes out ' + edgeText(t.edge) + ' in material.';
+    if (t.outcome === 'even') return SIDE[t.side] + ' has equalised and the material is level.';
+    return SIDE[t.side] + ' has the better game' + (t.ev ? ' (engine ' + evalText(t.ev.final) + ')' : '') +
+      '. Material here is ' + edgeText(t.edge) + ': the edge is in activity and king safety, not the count.';
   }
-  function who(t) { return t.side === 'w' ? 'White' : 'Black'; }
-  /* Material only means something for the two outcomes that are about material. */
-  function metaTail(t) {
-    if (t.outcome === 'material') return OUTCOME[t.outcome] + ', ' + finalEdge(t) + ' at the end';
-    if (t.outcome === 'even') return OUTCOME[t.outcome] + ', material level';
-    return OUTCOME[t.outcome];
-  }
-  function resultLine(t) {
-    if (t.outcome === 'mate') return 'Checkmate for ' + who(t) + '.';
-    if (t.outcome === 'material') return who(t) + ' comes out ' + finalEdge(t) + ' in material.';
-    if (t.outcome === 'even') return who(t) + ' has equalised completely and the material is level.';
-    return who(t) + ' has a winning attack. Material here is ' + finalEdge(t) +
-      ': the compensation is the initiative, not the count.';
-  }
-  function moveNo(ply) { return Math.floor(ply / 2) + 1; }
 
   /* ---------- board ---------- */
-  function drawBoard(host, st, last, flipped) {
-    var cells = E.squares(st);
-    if (flipped) cells = cells.slice().reverse();
-    var html = '';
-    for (var i = 0; i < cells.length; i++) {
-      var c = cells[i], cls = 'sq ' + (c.light ? 'l' : 'd');
-      if (last && (c.sq === last.from)) cls += ' from';
-      if (last && (c.sq === last.to)) cls += ' to';
-      var inner = c.piece ? '<span class="pc ' + c.piece.color + '">' + GLYPH[c.piece.type] + '</span>' : '';
-      var col = i % 8, row = (i / 8) | 0;
-      if (row === 7) inner += '<span class="co f">' + c.name[0] + '</span>';
-      if (col === 0) inner += '<span class="co r">' + c.name[1] + '</span>';
-      html += '<div class="' + cls + '">' + inner + '</div>';
+  function Board(host, opts) {
+    opts = opts || {};
+    this.host = host;
+    this.onMove = opts.onMove || null;
+    this.mini = !!opts.mini;
+    this.st = E.newGame();
+    this.flipped = false; this.last = null; this.arrows = []; this.hint = -1;
+    this.interactive = false; this.sel = -1; this.promo = null; this.legal = [];
+    host.classList.add('board');
+    if (this.mini) host.classList.add('mini');
+    else host.setAttribute('aria-label', 'Chess board');
+    var self = this;
+    if (!this.mini) host.addEventListener('click', function (e) { self.click(e); });
+  }
+  Board.prototype.set = function (o) {
+    this.st = o.st;
+    this.last = o.last || null;
+    this.flipped = !!o.flipped;
+    this.arrows = o.arrows || [];
+    this.hint = o.hint === undefined ? -1 : o.hint;
+    this.interactive = !!o.interactive && !E.isMate(o.st);
+    this.legal = this.interactive ? E.legalMoves(o.st) : [];
+    this.sel = -1;
+    this.promo = null;
+    this.render();
+  };
+  Board.prototype.render = function () {
+    this.host.innerHTML = boardHtml(this);
+    this.host.classList.toggle('live', this.interactive);
+  };
+  Board.prototype.click = function (e) {
+    if (!this.interactive) return;
+    var pick = e.target.closest('[data-promo]');
+    if (pick && this.promo) {
+      var want = pick.getAttribute('data-promo');
+      var mv = this.promo.moves.filter(function (m) { return m.promotion === want; })[0];
+      if (mv) return this.commit(mv);
     }
-    host.innerHTML = html;
+    if (this.promo) { this.promo = null; this.sel = -1; return this.render(); }
+    var el = e.target.closest('.sq');
+    if (!el) return;
+    var sq = +el.getAttribute('data-sq'), p = this.st.board[sq], from = this.sel;
+    if (from >= 0 && sq !== from) {
+      var c = this.legal.filter(function (m) { return m.from === from && m.to === sq; });
+      if (c.length === 1) return this.commit(c[0]);
+      if (c.length > 1) { this.promo = { moves: c }; return this.render(); }
+    }
+    this.sel = (p && p.color === this.st.turn && sq !== from) ? sq : -1;
+    this.render();
+  };
+  Board.prototype.commit = function (mv) {
+    this.sel = -1;
+    this.promo = null;
+    if (this.onMove) this.onMove(mv);
+  };
+
+  function boardHtml(b) {
+    var st = b.st, html = '', targets = {};
+    if (b.sel >= 0) {
+      b.legal.forEach(function (m) {
+        if (m.from === b.sel) targets[m.to] = (m.captured ? ' cap' : ' tgt');
+      });
+    }
+    var chk = E.inCheck(st, st.turn) ? E.findKing(st.board, st.turn) : -1;
+    for (var i = 0; i < 64; i++) {
+      var row = i >> 3, col = i & 7;
+      var r = b.flipped ? 7 - row : row, f = b.flipped ? 7 - col : col;
+      var sq = r * 16 + f, p = st.board[sq];
+      var cls = 'sq ' + ((r + f) % 2 === 0 ? 'l' : 'd');
+      if (b.last && sq === b.last.from) cls += ' from';
+      if (b.last && sq === b.last.to) cls += ' to';
+      if (sq === b.sel) cls += ' sel';
+      if (sq === chk) cls += ' chk';
+      if (sq === b.hint) cls += ' hint';
+      if (targets[sq]) cls += targets[sq];
+      if (b.interactive && p && p.color === st.turn) cls += ' own';
+      var inner = p ? '<span class="pc ' + p.color + '">' + GLYPH[p.type] + TEXT + '</span>' : '';
+      if (!b.mini) {
+        if (row === 7) inner += '<span class="co f">' + 'abcdefgh'[f] + '</span>';
+        if (col === 0) inner += '<span class="co r">' + (8 - r) + '</span>';
+      }
+      html += '<div class="' + cls + '" data-sq="' + sq + '">' + inner + '</div>';
+    }
+    html += arrowsSvg(b.arrows, b.flipped);
+    if (b.promo) {
+      html += '<div class="promo" role="dialog" aria-label="Promote to">' + ['q', 'r', 'b', 'n'].map(function (t) {
+        return '<button type="button" data-promo="' + t + '" title="' + PIECE[t] + '"><span class="pc ' + st.turn + '">' +
+          GLYPH[t] + TEXT + '</span></button>';
+      }).join('') + '</div>';
+    }
+    return html;
   }
 
-  /* ---------- explorer state ---------- */
-  var path = [], flipped = false;
-
-  function matching(p) {
-    return TRAPS.filter(function (t) {
-      if (p.length > t.line.length) return false;
-      for (var i = 0; i < p.length; i++) if (t.line[i] !== p[i]) return false;
-      return true;
-    });
+  /* Arrows are drawn with explicit polygons rather than SVG markers, so several boards on one
+     page never fight over marker ids. Coordinates are in squares: the board is 8 x 8 units. */
+  function centre(sq, flipped) {
+    var f = sq & 15, r = sq >> 4;
+    return { x: (flipped ? 7 - f : f) + 0.5, y: (flipped ? 7 - r : r) + 0.5 };
   }
-  function statusOf(t, n) {
-    if (n <= t.blunder) return n === t.blunder ? 'armed' : 'open';
-    return 'sprung';
-  }
-  function nextBookMoves(p, matches) {
-    var order = [], map = {};
-    matches.forEach(function (t) {
-      if (p.length >= t.line.length) return;
-      var m = t.line[p.length];
-      if (!map[m]) { map[m] = []; order.push(m); }
-      map[m].push(t);
+  function n2(v) { return Math.round(v * 1000) / 1000; }
+  function arrowsSvg(arrows, flipped) {
+    if (!arrows || !arrows.length) return '';
+    var s = '<svg class="arrows" viewBox="0 0 8 8" aria-hidden="true" focusable="false">';
+    arrows.forEach(function (a) {
+      var f = centre(a.from, flipped), t = centre(a.to, flipped);
+      var dx = t.x - f.x, dy = t.y - f.y, len = Math.sqrt(dx * dx + dy * dy);
+      var ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+      var tipX = t.x - ux * 0.12, tipY = t.y - uy * 0.12;
+      var bx = tipX - ux * 0.44, by = tipY - uy * 0.44, hw = 0.25;
+      var sx = f.x + ux * 0.2, sy = f.y + uy * 0.2;
+      s += '<g class="ar ' + a.kind + '"><line x1="' + n2(sx) + '" y1="' + n2(sy) + '" x2="' + n2(bx) + '" y2="' + n2(by) +
+        '"/><polygon points="' + [tipX, tipY, bx + nx * hw, by + ny * hw, bx - nx * hw, by - ny * hw].map(n2).join(' ') + '"/></g>';
     });
-    order.sort(function (a, b) { return map[b].length - map[a].length || a.localeCompare(b); });
-    return order.map(function (m) { return { san: m, traps: map[m] }; });
+    return s + '</svg>';
   }
 
-  function esc(s) {
-    return String(s).replace(/[&<>"]/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  /* ---------- explorer ---------- */
+  var X = { side: store.get('side', 'w') === 'b' ? 'b' : 'w', flip: false, hist: [], states: [E.newGame()], moves: [], cur: 0 };
+  (function restore() {
+    var saved = store.get('hist', []), cur = store.get('cur', 0);
+    if (!Array.isArray(saved)) return;
+    for (var i = 0; i < saved.length && i < 400; i++) {
+      var mv = E.sanToMove(X.states[i], saved[i]);
+      if (!mv) break;
+      X.hist.push(E.moveToSan(X.states[i], mv));
+      X.moves.push(mv);
+      X.states.push(E.makeMove(X.states[i], mv));
+    }
+    X.cur = Math.max(0, Math.min(X.hist.length, cur | 0));
+  })();
+  function saveExplorer() { store.set('side', X.side); store.set('hist', X.hist); store.set('cur', X.cur); }
+
+  /* The side's traps that pass through this exact position, whatever the move order. */
+  function hitsAt(st, side) {
+    var seen = {};
+    return (INDEX[E.positionKey(st)] || []).filter(function (h) {
+      if (h.t.side !== side || seen[h.t.id]) return false;
+      return (seen[h.t.id] = true);
     });
   }
-  function sideTag(t) { return '<span class="tag ' + t.side + '">' + (t.side === 'w' ? 'White' : 'Black') + '</span>'; }
+  function statusOf(h) {
+    var t = h.t, k = h.k;
+    if (k < t.blunder) return 'open';
+    if (k === t.blunder) return 'armed';
+    if (k <= t.punish) return 'sprung';
+    return k < t.line.length ? 'after' : 'done';
+  }
+  /* Next moves in the book. For the trapping side: the refutation (good) or a set-up move (info).
+     For the opponent: the losing move (bad) or an ordinary book reply. */
+  function bookMoves(hits, st) {
+    var map = {}, list = [];
+    hits.forEach(function (h) {
+      var t = h.t, k = h.k;
+      if (k >= t.line.length) return;
+      var san = t.line[k];
+      var o = map[san];
+      if (!o) {
+        o = map[san] = { san: san, mv: E.sanToMove(st, san), traps: [], good: false, bad: false, punish: false };
+        list.push(o);
+      }
+      o.traps.push(t);
+      if (mover(k) === t.side && k >= t.punish) o.good = true;
+      if (k === t.punish && k > t.blunder) o.punish = true;
+      if (k === t.blunder) o.bad = true;
+    });
+    return list.filter(function (o) { return o.mv; }).sort(function (a, b) {
+      return (b.good - a.good) || (b.bad - a.bad) || (b.traps.length - a.traps.length) || a.san.localeCompare(b.san);
+    });
+  }
+
+  var xBoard = new Board($('board'), { onMove: function (mv) { xPlay(mv); } });
+
+  function xPlay(mv) {
+    var st = X.states[X.cur], san = E.moveToSan(st, mv);
+    if (X.hist[X.cur] !== san) {
+      X.hist = X.hist.slice(0, X.cur).concat(san);
+      X.moves = X.moves.slice(0, X.cur).concat(mv);
+      X.states = X.states.slice(0, X.cur + 1).concat(E.makeMove(st, mv));
+    }
+    X.cur++;
+    $('err').textContent = '';
+    saveExplorer();
+    renderExplorer();
+  }
+  function xTyped(text) {
+    var st = X.states[X.cur], mv = E.sanToMove(st, text);
+    if (!mv) {
+      $('err').textContent = '“' + text + '” is not a legal move for ' + SIDE[st.turn] +
+        ' here. Try standard notation (e4, Nf3, Bxf7+, O-O) or tap the board.';
+      return false;
+    }
+    xPlay(mv);
+    return true;
+  }
+  function xGo(n) {
+    X.cur = Math.max(0, Math.min(X.hist.length, n));
+    $('err').textContent = '';
+    saveExplorer();
+    renderExplorer();
+  }
+  function lastBookPly() {
+    for (var n = X.cur - 1; n >= 0; n--) if (hitsAt(X.states[n], X.side).length) return n;
+    return 0;
+  }
 
   function renderExplorer() {
-    var p = posAfter(path, path.length);
-    drawBoard($('board'), p.st, p.last, flipped);
-    $('turn-side').innerHTML = '<span class="dot ' + p.st.turn + '"></span>' +
-      (p.st.turn === 'w' ? 'White' : 'Black') + ' to move' +
-      (E.inCheck(p.st, p.st.turn) ? ' &middot; in check' : '');
-    $('turn-ply').textContent = path.length ? 'move ' + moveNo(path.length - 1) + ' · ' + path.length + ' plies' : 'starting position';
+    var st = X.states[X.cur], side = X.side, mine = st.turn === side, n = X.cur;
+    var hits = hitsAt(st, side), book = bookMoves(hits, st);
+    var mate = E.isMate(st), dead = !mate && !E.legalMoves(st).length;
+
+    var arrows = [];
+    if (mine) {
+      var show = book.filter(function (o) { return o.good; });
+      if (!show.length && book.length <= 3) show = book;
+      show.forEach(function (o) { arrows.push({ from: o.mv.from, to: o.mv.to, kind: o.good ? 'good' : 'info' }); });
+    } else {
+      book.forEach(function (o) { if (o.bad) arrows.push({ from: o.mv.from, to: o.mv.to, kind: 'bad' }); });
+    }
+    xBoard.set({ st: st, last: n ? X.moves[n - 1] : null, flipped: (side === 'b') !== X.flip, arrows: arrows, interactive: true });
+
+    [].forEach.call($('sideSeg').children, function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-side') === side); });
+    var turn = mate ? 'Checkmate. ' + SIDE[st.turn === 'w' ? 'b' : 'w'] + ' wins.'
+      : dead ? 'Stalemate.'
+      : (mine ? 'Your move' : 'Opponent to move') + ' (' + SIDE[st.turn] + ')' + (E.inCheck(st, st.turn) ? ', in check' : '');
+    $('turn').innerHTML = '<span class="dot ' + st.turn + '"></span>' + esc(turn);
+    $('ply').textContent = n ? 'after ' + label(n - 1, X.hist[n - 1]) : 'start position';
+    $('back').disabled = n === 0;
+    $('fwd').disabled = n >= X.hist.length;
+    $('reset').disabled = !X.hist.length;
+    $('xLichess').href = lichessUrl(st, side);
 
     /* move list */
     var pgn = '';
-    for (var i = 0; i < path.length; i++) {
-      if (i % 2 === 0) pgn += '<span class="n">' + moveNo(i) + '.</span> ';
-      pgn += '<span class="m' + (i === path.length - 1 ? ' cur' : '') + '" data-ply="' + (i + 1) + '">' + esc(path[i]) + '</span> ';
-    }
-    $('pgn').innerHTML = pgn || '<span class="empty">No moves yet. Type the first move or pick one below.</span>';
+    X.hist.forEach(function (san, i) {
+      if (i % 2 === 0) pgn += '<span class="n">' + moveNo(i) + '.</span>';
+      pgn += '<button type="button" class="m' + (i === n - 1 ? ' cur' : '') + (i >= n ? ' future' : '') +
+        '" data-ply="' + (i + 1) + '">' + esc(san) + '</button>';
+    });
+    $('pgn').innerHTML = pgn || '<span class="empty">No moves yet.</span>';
 
-    var matches = matching(path), n = path.length;
-
-    /* book choices */
-    var choices = nextBookMoves(path, matches);
-    $('choices').innerHTML = choices.length
-      ? choices.map(function (c) {
-          return '<button class="mv" data-san="' + esc(c.san) + '"><b>' + esc(c.san) + '</b><i>' + c.traps.length + '</i></button>';
-        }).join('')
-      : '';
-    $('choices-hdr').textContent = choices.length
-      ? 'Book continuations (number = traps behind that move)'
-      : (matches.length ? 'End of the line.' : 'No trap in the library continues from here.');
-
-    /* live alerts: the punishing move is available right now */
-    var live = matches.filter(function (t) { return n === t.punish; });
-    $('alerts').innerHTML = live.map(function (t) {
-      return '<div class="alert"><h3>Trap is live — ' + esc(t.name) + '</h3>' +
-        '<p>' + (t.side === 'w' ? 'White' : 'Black') + ' plays <b>' + esc(t.line[t.punish]) + '</b> now. ' +
-        esc(t.summary.split('. ')[0]) + '.</p>' +
-        '<button class="btn primary play" data-san="' + esc(t.line[t.punish]) + '">Play ' + esc(t.line[t.punish]) + '</button> ' +
-        '<button class="btn play-open" data-id="' + t.id + '">Open full line</button></div>';
+    /* input panel */
+    $('inputHdr').textContent = mate || dead ? 'Game over' : mine ? 'Your move' : 'Opponent’s move';
+    $('movein').placeholder = mine ? 'Your move, e.g. Nf3' : 'Opponent’s move, e.g. e5';
+    var hdr = '';
+    if (mate || dead) hdr = '';
+    else if (book.length) hdr = mine ? 'Book moves that keep your traps alive' : 'What they might play (red = walks into a trap)';
+    else if (hits.length) hdr = 'End of the book line.';
+    $('choicesHdr').textContent = hdr;
+    $('choices').innerHTML = book.map(function (o) {
+      var cap = o.punish ? 'punish' : o.good ? 'keep going'
+        : o.bad ? '?? ' + o.traps.map(function (t) { return t.name; }).join(', ')
+        : o.traps.length + (o.traps.length === 1 ? ' trap' : ' traps');
+      return '<button type="button" class="mv' + (o.good ? ' good' : '') + (o.bad ? ' bad' : '') + '" data-san="' + esc(o.san) + '">' +
+        '<b>' + esc(label(n, o.san)) + '</b><i>' + esc(cap) + '</i></button>';
     }).join('');
 
-    /* matching traps */
-    $('matchhdr').textContent = matches.length + (matches.length === 1 ? ' trap matches' : ' traps match') +
-      (n ? ' these ' + n + ' plies' : ' (all of them)');
-    if (!matches.length) {
-      $('matches').innerHTML = '<p class="empty-note">Out of book. No trap in this library runs through this position. ' +
-        '<b>Undo</b> the last move to get back to the tree, or <b>Reset</b> and start again.</p>';
+    /* the moment of truth: the opponent has blundered and the refutation is on */
+    var live = mine ? hits.filter(function (h) { return h.k === h.t.punish && h.k > h.t.blunder; }) : [];
+    $('alerts').innerHTML = live.map(function (h) {
+      var t = h.t, san = t.line[t.punish];
+      return '<div class="alert"><div class="alert-h">They fell for it: ' + esc(t.name) + '</div>' +
+        '<p>' + esc(SIDE[other(t.side)]) + '\u2019s <b>' + esc(glabel(h, n, t.blunder)) + '</b> was the mistake. Punish it with <b>' +
+        esc(glabel(h, n, t.punish)) + '</b>. ' + esc(OUTCOME[t.outcome]) + (t.ev && t.outcome !== 'mate' ? ', engine ' + esc(evalText(t.ev.final)) : '') + '.</p>' +
+        '<div class="row"><button type="button" class="btn primary" data-play="' + esc(san) + '">Play ' + esc(san) + '</button>' +
+        '<button type="button" class="btn" data-open="' + t.id + '" data-k="' + h.k + '">See the whole line</button></div></div>';
+    }).join('');
+
+    /* trap list */
+    var sideTraps = TRAPS.filter(function (t) { return t.side === side; }).length;
+    $('matchHdr').textContent = hits.length
+      ? (n ? hits.length + ' of your ' + sideTraps + ' ' + SIDE[side] + ' traps still possible' : 'Your ' + sideTraps + ' traps as ' + SIDE[side])
+      : 'No traps from here';
+    if (!hits.length) {
+      var back = lastBookPly();
+      $('matches').innerHTML = '<p class="empty-note">Out of book. None of your ' + SIDE[side] +
+        ' traps passes through this position, in any move order.</p>' +
+        (n ? '<button type="button" class="btn" data-goto="' + back + '">Back to the last book position (' +
+          (back ? esc(label(back - 1, X.hist[back - 1])) : 'start') + ')</button>' : '');
     } else {
-      var rank = { armed: 0, sprung: 1, open: 2 };
-      var sorted = matches.slice().sort(function (a, b) {
-        var ra = rank[statusOf(a, n)], rb = rank[statusOf(b, n)];
-        return ra - rb || (a.line.length - b.line.length);
-      });
-      $('matches').innerHTML = sorted.map(function (t) {
-        var st = statusOf(t, n), note = '';
-        if (st === 'armed') {
-          note = '<div class="st armed">&#9888; ' + (t.side === 'w' ? 'Black' : 'White') +
-            ' blunders here with <b>' + esc(t.line[t.blunder]) + '</b></div>';
-        } else if (st === 'sprung') {
-          note = '<div class="st sprung">&#10003; Blunder played. ' +
-            (n === t.punish ? 'Punish with <b>' + esc(t.line[t.punish]) + '</b> now.'
-                            : 'Refutation: <b>' + esc(t.line[t.punish]) + '</b> on move ' + moveNo(t.punish) + '.') + '</div>';
-        } else {
-          note = '<div class="st">' + (t.blunder - n) + ' more ' + (t.blunder - n === 1 ? 'ply' : 'plies') +
-            ' until the blunder</div>';
-        }
-        return '<button class="trap" data-id="' + t.id + '"><div class="row1">' + sideTag(t) +
-          '<span class="nm">' + esc(t.name) + '</span><span class="tag o">' + OUTCOME[t.outcome] + '</span></div>' +
-          '<div class="meta">' + esc(t.opening) + ' · ' + t.eco + '</div>' + note + '</button>';
-      }).join('');
+      var rank = { sprung: 0, armed: 1, after: 2, open: 3, done: 4 };
+      $('matches').innerHTML = hits.slice().sort(function (a, b) {
+        return (rank[statusOf(a)] - rank[statusOf(b)]) || ((a.t.blunder - a.k) - (b.t.blunder - b.k)) || a.t.name.localeCompare(b.t.name);
+      }).map(function (h) { return trapRow(h, n); }).join('');
     }
-    $('undo').disabled = !path.length;
+    $('undoHint').hidden = !n;
   }
 
-  function tryMove(san) {
-    var p = posAfter(path, path.length);
-    var mv = E.sanToMove(p.st, san);
-    if (!mv) {
-      $('err').textContent = '"' + san + '" is not a legal move here. Use standard notation: e4, Nf3, Bxf7+, O-O.';
-      return false;
-    }
-    path.push(E.moveToSan(p.st, mv));
-    $('err').textContent = '';
-    renderExplorer();
-    return true;
+  /* Label for ply j of a trap line, numbered as in the game on the board (a transposition can
+     reach the same position after a different number of moves). */
+  function glabel(h, n, j) { return label(n + (j - h.k), h.t.line[j]); }
+  function trapRow(h, n) {
+    var t = h.t, k = h.k, st = statusOf(h), note;
+    var nxt = k < t.line.length ? glabel(h, n, k) : '';
+    var whoNext = k < t.line.length ? (mover(k) === t.side ? 'you' : 'them') : '';
+    if (st === 'armed') note = '<div class="st armed">Their move. ' + esc(glabel(h, n, t.blunder)) + '?? loses</div>';
+    else if (st === 'sprung') note = '<div class="st sprung">' + (k === t.punish ? 'They fell for it. Play ' + esc(glabel(h, n, t.punish))
+      : 'They fell for it. Next: ' + esc(nxt) + ' (' + whoNext + ')') + '</div>';
+    else if (st === 'after') note = '<div class="st sprung">Refutation under way. Next: ' + esc(nxt) + ' (' + whoNext + ')</div>';
+    else if (st === 'done') note = '<div class="st sprung">Line complete: ' + esc(OUTCOME[t.outcome].toLowerCase()) + '</div>';
+    else note = '<div class="st">Next: ' + esc(nxt) + ' (' + whoNext + '). Their mistake comes at ' +
+      esc(glabel(h, n, t.blunder)) + '</div>';
+    return '<button type="button" class="trap" data-open="' + t.id + '" data-k="' + k + '"><div class="row1">' +
+      '<span class="nm">' + esc(t.name) + '</span>' + outcomeTag(t) + '</div>' +
+      '<div class="meta">' + esc(t.opening) + ' · ' + t.eco + '</div>' + note + '</button>';
+  }
+  function outcomeTag(t) {
+    var v = t.ev && t.outcome !== 'mate' && typeof t.ev.final === 'number' ? ' ' + evalText(t.ev.final) : '';
+    return '<span class="tag o ' + t.outcome + '">' + OUTCOME[t.outcome] + esc(v) + '</span>' +
+      (t.risky ? '<span class="tag risky" title="Objectively dubious: if the opponent plays well you are worse">Risky</span>' : '');
+  }
+  function other(s) { return s === 'w' ? 'b' : 'w'; }
+
+  /* ---------- learned ---------- */
+  var learned = {};
+  (store.get('learned', []) || []).forEach(function (id) { if (BY_ID[id]) learned[id] = true; });
+  function setLearned(id, on) {
+    if (on) learned[id] = true; else delete learned[id];
+    store.set('learned', Object.keys(learned));
   }
 
   /* ---------- library ---------- */
-  var fSide = 'all', fQuery = '';
+  var L = { side: store.get('libSide', 'all'), outcome: 'all', sort: store.get('libSort', 'eco'), hide: false, q: '' };
+  /* Thumbnail: the position where the trapping side strikes, with the refutation drawn in. */
+  TRAPS.forEach(function (t) {
+    var k = t.punish, b = { st: t.states[k], last: t.moves[k - 1], flipped: t.side === 'b', sel: -1, legal: [], hint: -1,
+      arrows: [{ from: t.moves[k].from, to: t.moves[k].to, kind: 'good' }], mini: true, interactive: false };
+    t.thumb = boardHtml(b);
+  });
   function renderLibrary() {
-    var q = fQuery.trim().toLowerCase();
+    var q = L.q.trim().toLowerCase();
     var list = TRAPS.filter(function (t) {
-      if (fSide !== 'all' && t.side !== fSide) return false;
-      if (!q) return true;
-      return (t.name + ' ' + t.opening + ' ' + t.eco + ' ' + t.line.join(' ')).toLowerCase().indexOf(q) >= 0;
+      if (L.side !== 'all' && t.side !== L.side) return false;
+      if (L.outcome !== 'all' && t.outcome !== L.outcome) return false;
+      if (L.hide && learned[t.id]) return false;
+      return !q || (t.name + ' ' + t.opening + ' ' + t.eco + ' ' + t.line.join(' ')).toLowerCase().indexOf(q) >= 0;
     });
-    $('libcount').textContent = list.length + ' of ' + TRAPS.length + ' shown';
+    list.sort(function (a, b) {
+      if (L.sort === 'name') return a.name.localeCompare(b.name);
+      if (L.sort === 'short') return (a.line.length - b.line.length) || a.name.localeCompare(b.name);
+      return a.eco.localeCompare(b.eco) || a.name.localeCompare(b.name);
+    });
+    var done = Object.keys(learned).length;
+    $('libcount').textContent = list.length + ' shown · ' + done + ' of ' + TRAPS.length + ' learned';
+    $('progress').style.width = (100 * done / TRAPS.length) + '%';
     $('grid').innerHTML = list.length ? list.map(function (t) {
-      return '<button class="trap" data-id="' + t.id + '"><div class="row1">' + sideTag(t) +
-        '<span class="nm">' + esc(t.name) + '</span></div>' +
-        '<div class="meta">' + esc(t.opening) + ' · ' + t.eco + '</div>' +
-        '<div class="st">' + OUTCOME[t.outcome] + ' · ' + t.line.length + ' plies</div></button>';
-    }).join('') : '<p class="empty-note">Nothing matches that search.</p>';
+      return '<button type="button" class="tcard' + (learned[t.id] ? ' is-learned' : '') + '" data-open="' + t.id + '" data-k="0">' +
+        '<div class="board mini" aria-hidden="true">' + t.thumb + '</div><div class="tbody">' +
+        '<div class="row1"><span class="tag ' + t.side + '">' + SIDE[t.side] + '</span>' + outcomeTag(t) +
+        (learned[t.id] ? '<span class="tick" title="Learned">✓</span>' : '') + '</div>' +
+        '<div class="nm">' + esc(t.name) + '</div>' +
+        '<div class="meta">' + esc(t.opening) + ' · ' + t.eco + ' · ' + Math.ceil(t.line.length / 2) + ' moves</div></div></button>';
+    }).join('') : '<p class="empty-note">Nothing matches.</p>';
+    [].forEach.call($('libSide').children, function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-side') === L.side); });
   }
 
-  /* ---------- viewer ---------- */
-  var vTrap = null, vPly = 0;
-  function openTrap(id) {
-    vTrap = BY_ID[id];
-    vPly = 0;
+  /* ---------- viewer: study and quiz ---------- */
+  var V = { t: null, ply: 0, mode: 'study', timer: null, auto: null, q: null, opener: null };
+  var vBoard = new Board($('vBoard'), { onMove: function (mv) { quizMove(mv); } });
+
+  function openTrap(id, ply, mode) {
+    V.t = BY_ID[id];
+    if (!V.t) return;
+    V.opener = document.activeElement;
+    V.ply = Math.max(0, Math.min(V.t.line.length, ply || 0));
+    setMode(mode || 'study');
     $('overlay').hidden = false;
-    document.body.style.overflow = 'hidden';
-    renderViewer();
+    document.body.classList.add('modal-open');
+    $('vClose').focus();
   }
   function closeTrap() {
+    stopTimers();
     $('overlay').hidden = true;
-    document.body.style.overflow = '';
-    vTrap = null;
+    document.body.classList.remove('modal-open');
+    V.t = null;
+    if (V.opener && V.opener.focus && document.body.contains(V.opener)) V.opener.focus();
+    renderLibrary();
   }
+  function stopTimers() {
+    if (V.timer) { clearTimeout(V.timer); V.timer = null; }
+    if (V.auto) { clearInterval(V.auto); V.auto = null; }
+  }
+  function setMode(mode) {
+    stopTimers();
+    V.mode = mode;
+    if (mode === 'quiz') {
+      V.ply = 0;
+      V.q = { mistakes: 0, tries: 0, msg: 'Play the ' + SIDE[V.t.side] + ' moves. The opponent’s replies are played for you.', tone: 'info', shown: false };
+      $('qIn').value = '';
+      quizAdvance();
+    }
+    renderViewer();
+  }
+
+  /* Opponent moves in the quiz are played automatically, with a short pause so they can be followed. */
+  function quizAdvance() {
+    var t = V.t;
+    if (!t || V.mode !== 'quiz') return;
+    if (V.ply >= t.line.length) return quizDone();
+    if (mover(V.ply) === t.side) { renderViewer(); return; }
+    V.timer = setTimeout(function () {
+      V.timer = null;
+      if (!V.t || V.mode !== 'quiz') return;
+      var k = V.ply;
+      V.ply++;
+      if (k === t.blunder) {
+        V.q.msg = SIDE[mover(k)] + ' plays ' + label(k, t.line[k]) + '?? That is the mistake. Find the punishment.';
+        V.q.tone = 'warn';
+      }
+      quizAdvance();
+      renderViewer();
+    }, 550);
+  }
+  function quizMove(mv) {
+    var t = V.t;
+    if (!t || V.mode !== 'quiz' || V.timer) return;
+    var k = V.ply, st = t.states[k], san = E.moveToSan(st, mv), after = E.makeMove(st, mv);
+    var mates = E.isMate(after);
+    if (san === t.line[k] || mates) {
+      /* any checkmate is accepted; if it differs from the book move, show the position actually reached */
+      if (mates && san !== t.line[k]) V.q.final = { st: after, last: mv };
+      V.ply = mates ? t.line.length : k + 1;
+      V.q.tries = 0;
+      var note = t.notes && t.notes[k] && san === t.line[k] ? ' ' + t.notes[k] : '';
+      V.q.msg = (mates ? 'Checkmate. ' : 'Correct: ' + label(k, san) + '.') + note;
+      V.q.tone = 'ok';
+      $('qIn').value = '';
+      quizAdvance();
+    } else {
+      V.q.mistakes++;
+      V.q.tries++;
+      V.q.msg = label(k, san) + ' is not the move in this line.' + (V.q.tries >= 2
+        ? ' Hint: the ' + PIECE[t.moves[k].piece] + ' on ' + E.sqName(t.moves[k].from) + ' moves.'
+        : ' Try again.');
+      V.q.tone = 'bad';
+    }
+    renderViewer();
+  }
+  function quizReveal() {
+    var t = V.t;
+    if (!t || V.mode !== 'quiz' || V.timer || V.ply >= t.line.length || mover(V.ply) !== t.side) return;
+    V.q.mistakes++;
+    V.q.shown = true;
+    var k = V.ply;
+    V.ply++;
+    V.q.tries = 0;
+    V.q.msg = 'The move is ' + label(k, t.line[k]) + '.' + (t.notes && t.notes[k] ? ' ' + t.notes[k] : '');
+    V.q.tone = 'info';
+    quizAdvance();
+    renderViewer();
+  }
+  function quizDone() {
+    var t = V.t, m = V.q.mistakes;
+    V.q.done = true;
+    if (m === 0) setLearned(t.id, true);
+    V.q.msg = (m === 0 ? 'Flawless. Marked as learned.' : 'Line complete with ' + m + (m === 1 ? ' mistake.' : ' mistakes.') +
+      ' Run it again until it is clean.') + ' ' + outcomeLine(t);
+    V.q.tone = m === 0 ? 'ok' : 'info';
+    renderViewer();
+  }
+
   function renderViewer() {
-    var t = vTrap;
+    var t = V.t;
     if (!t) return;
-    var p = posAfter(t.line, vPly);
-    drawBoard($('v-board'), p.st, p.last, t.side === 'b');
-    $('v-name').textContent = t.name;
-    $('v-meta').innerHTML = sideTag(t) + ' ' + esc(t.opening) + ' · ' + t.eco + ' · ' +
-      OUTCOME[t.outcome] + ' · material ' + finalEdge(t) + ' at the end';
+    var k = V.ply, quiz = V.mode === 'quiz', end = k >= t.line.length;
+    var alt = quiz && end && V.q.final, st = alt ? V.q.final.st : t.states[k];
+    var yourTurn = quiz && !end && !V.timer && mover(k) === t.side;
+    var arrows = [];
+    if (!quiz && !end) arrows.push({ from: t.moves[k].from, to: t.moves[k].to, kind: k === t.blunder ? 'bad' : (k >= t.punish && mover(k) === t.side) ? 'good' : 'info' });
+    vBoard.set({ st: st, last: alt ? V.q.final.last : k ? t.moves[k - 1] : null, flipped: t.side === 'b', arrows: arrows, interactive: yourTurn,
+      hint: quiz && yourTurn && V.q.tries >= 2 ? t.moves[k].from : -1 });
 
+    $('vName').textContent = t.name;
+    $('vMeta').innerHTML = '<span class="tag ' + t.side + '">' + SIDE[t.side] + '</span> ' + esc(t.opening) + ' · ' + t.eco + ' ' + outcomeTag(t);
+    [].forEach.call($('vModes').children, function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-mode') === V.mode); });
+    $('vStudyCtrls').hidden = quiz;
+    $('vQuizCtrls').hidden = !quiz;
+    $('qIn').disabled = !yourTurn;
+    $('qShow').disabled = !yourTurn;
+    $('vAuto').textContent = V.auto ? '❚❚' : '▶';
+    $('vAuto').title = V.auto ? 'Pause' : 'Play through';
+
+    /* move strip: in the quiz only what has been played is shown */
     var strip = '';
-    for (var i = 0; i < t.line.length; i++) {
-      var cls = 'm';
-      if (i === vPly - 1) cls += ' cur';
-      if (i === t.blunder) cls += ' bl';
-      if (i === t.punish) cls += ' pu';
-      if (i % 2 === 0) strip += '<span class="n">' + moveNo(i) + '.</span> ';
-      strip += '<span class="' + cls + '" data-ply="' + (i + 1) + '">' + esc(t.line[i]) + '</span> ';
+    var upto = quiz ? k : t.line.length;
+    for (var i = 0; i < upto; i++) {
+      var cls = 'm' + (i === k - 1 ? ' cur' : '') + (i === t.blunder ? ' bl' : '') + (i === t.punish ? ' pu' : '');
+      if (i % 2 === 0) strip += '<span class="n">' + moveNo(i) + '.</span>';
+      strip += quiz ? '<span class="' + cls + '">' + esc(t.line[i]) + '</span>'
+        : '<button type="button" class="' + cls + '" data-ply="' + (i + 1) + '">' + esc(t.line[i]) + '</button>';
     }
-    $('v-strip').innerHTML = strip;
+    if (quiz && !end) strip += (k % 2 === 0 ? '<span class="n">' + moveNo(k) + '.</span>' : '') + '<span class="m q">?</span>';
+    $('vStrip').innerHTML = strip;
 
+    /* notes */
     var out = '';
-    if (vPly > 0 && t.notes && t.notes[vPly - 1]) {
-      var k = vPly - 1, nc = k === t.blunder ? ' blunder' : (k === t.punish ? ' punish' : '');
-      out += '<div class="note' + nc + '"><b>' + moveNo(k) + (k % 2 ? '...' : '.') + ' ' +
-        esc(t.line[k]) + '</b> — ' + esc(t.notes[k]) + '</div>';
+    if (quiz) {
+      out += '<div class="fb ' + V.q.tone + '" role="status">' + esc(V.q.msg) + '</div>';
+      if (V.q.done) out += ideaBlock(t);
+    } else {
+      if (k === 0) out += '<p class="lead">' + esc(t.summary) + '</p>';
+      if (k > 0 && t.notes && t.notes[k - 1]) {
+        var j = k - 1;
+        out += '<div class="note' + (j === t.blunder ? ' blunder' : j === t.punish ? ' punish' : '') + '"><b>' +
+          esc(label(j, t.line[j])) + '</b> ' + esc(t.notes[j]) + '</div>';
+      }
+      if (k - 1 === t.blunder) out += '<div class="note blunder"><b>This is the mistake.</b> ' +
+        (t.ev ? 'Before it, ' + esc(label(t.blunder, t.ev.best)) + ' was best (' + esc(evalText(t.ev.before)) + ' for ' + SIDE[t.side] + '); now it is ' + esc(evalText(t.ev.after)) + '. ' : '') +
+        'See below for how to avoid it.</div>';
+      if (end) out += '<div class="note punish"><b>Result.</b> ' + esc(outcomeLine(t)) + '</div>';
+      if (k > 0) out += ideaBlock(t);
     }
-    if (vPly - 1 === t.blunder) {
-      out += '<div class="note blunder"><b>This is the mistake.</b> ' + esc(t.better) + '</div>';
-    }
-    if (vPly === t.line.length) {
-      out += '<div class="note punish"><b>Result:</b> ' + resultLine(t) + '</div>';
-    }
-    out += '<dl><dt>Idea</dt><dd>' + esc(t.summary) + '</dd>' +
-      '<dt>How the other side avoids it</dt><dd>' + esc(t.better) + '</dd></dl>';
-    $('v-notes').innerHTML = out;
-    $('v-prev').disabled = vPly === 0;
-    $('v-start').disabled = vPly === 0;
-    $('v-next').disabled = vPly >= t.line.length;
-    $('v-end').disabled = vPly >= t.line.length;
+    $('vNotes').innerHTML = out;
+    $('vLearned').checked = !!learned[t.id];
+    $('vLichess').href = lichessUrl(st, t.side);
+    $('vPrev').disabled = $('vStart').disabled = k === 0;
+    $('vNext').disabled = $('vEnd').disabled = end;
+  }
+  function ideaBlock(t) {
+    var ev = t.ev ? '<dt>Engine check</dt><dd>' + esc(engineLine(t)) + '</dd>' : '';
+    return '<dl><dt>The idea</dt><dd>' + esc(t.summary) + '</dd><dt>How the other side avoids it</dt><dd>' + esc(t.better) + '</dd>' + ev + '</dl>';
+  }
+  function engineLine(t) {
+    var e = t.ev, me = SIDE[t.side];
+    var s = 'Stockfish at depth ' + e.depth + ', scores from ' + me + '’s side. If they find ' +
+      label(t.blunder, e.best) + ': ' + evalText(e.before) + '. After ' + label(t.blunder, t.line[t.blunder]) + ': ' +
+      evalText(e.after) + '. End of the line: ' + evalText(e.final) + '.';
+    if (t.risky) s += ' The set-up is objectively dubious: against correct play you are the one who is worse.';
+    return s;
+  }
+  function step(d) {
+    if (!V.t || V.mode !== 'study') return;
+    V.ply = Math.max(0, Math.min(V.t.line.length, V.ply + d));
+    renderViewer();
+  }
+  function toggleAuto() {
+    if (V.auto) { stopTimers(); renderViewer(); return; }
+    if (V.ply >= V.t.line.length) V.ply = 0;
+    V.auto = setInterval(function () {
+      if (!V.t || V.ply >= V.t.line.length) { stopTimers(); renderViewer(); return; }
+      V.ply++;
+      renderViewer();
+    }, 900);
+    renderViewer();
   }
 
   /* ---------- wiring ---------- */
   function on(el, ev, fn) { el.addEventListener(ev, fn); }
+  function openFrom(e) {
+    var b = e.target.closest('[data-open]');
+    if (b) openTrap(b.getAttribute('data-open'), +b.getAttribute('data-k') || 0, 'study');
+    return !!b;
+  }
 
   on($('entry'), 'submit', function (e) {
     e.preventDefault();
     var v = $('movein').value.trim();
-    if (!v) return;
-    if (tryMove(v)) $('movein').value = '';
-    $('movein').focus();
+    if (v && xTyped(v)) $('movein').value = '';
   });
   on($('choices'), 'click', function (e) {
     var b = e.target.closest('.mv');
-    if (b) tryMove(b.dataset.san);
+    if (b) xTyped(b.getAttribute('data-san'));
   });
   on($('alerts'), 'click', function (e) {
-    var p = e.target.closest('.play');
-    if (p) return tryMove(p.dataset.san);
-    var o = e.target.closest('.play-open');
-    if (o) openTrap(o.dataset.id);
+    var p = e.target.closest('[data-play]');
+    if (p) return xTyped(p.getAttribute('data-play'));
+    openFrom(e);
   });
   on($('matches'), 'click', function (e) {
-    var b = e.target.closest('.trap');
-    if (b) openTrap(b.dataset.id);
+    var g = e.target.closest('[data-goto]');
+    if (g) return xGo(+g.getAttribute('data-goto'));
+    openFrom(e);
   });
-  on($('grid'), 'click', function (e) {
-    var b = e.target.closest('.trap');
-    if (b) openTrap(b.dataset.id);
-  });
+  on($('grid'), 'click', openFrom);
   on($('pgn'), 'click', function (e) {
-    var m = e.target.closest('.m');
-    if (m) { path = path.slice(0, +m.dataset.ply); $('err').textContent = ''; renderExplorer(); }
+    var m = e.target.closest('[data-ply]');
+    if (m) xGo(+m.getAttribute('data-ply'));
   });
-  on($('undo'), 'click', function () { path.pop(); $('err').textContent = ''; renderExplorer(); });
-  on($('reset'), 'click', function () { path = []; $('err').textContent = ''; renderExplorer(); });
-  on($('flip'), 'click', function () { flipped = !flipped; renderExplorer(); });
+  on($('back'), 'click', function () { xGo(X.cur - 1); });
+  on($('fwd'), 'click', function () { xGo(X.cur + 1); });
+  on($('reset'), 'click', function () {
+    X.hist = []; X.moves = []; X.states = [E.newGame()]; X.cur = 0;
+    $('err').textContent = '';
+    saveExplorer();
+    renderExplorer();
+  });
+  on($('flip'), 'click', function () { X.flip = !X.flip; renderExplorer(); });
+  on($('sideSeg'), 'click', function (e) {
+    var b = e.target.closest('[data-side]');
+    if (!b) return;
+    X.side = b.getAttribute('data-side');
+    X.flip = false;
+    saveExplorer();
+    renderExplorer();
+  });
 
-  on($('v-close'), 'click', closeTrap);
-  on($('overlay'), 'click', function (e) { if (e.target === $('overlay')) closeTrap(); });
-  on($('v-prev'), 'click', function () { if (vPly > 0) { vPly--; renderViewer(); } });
-  on($('v-next'), 'click', function () { if (vTrap && vPly < vTrap.line.length) { vPly++; renderViewer(); } });
-  on($('v-start'), 'click', function () { vPly = 0; renderViewer(); });
-  on($('v-end'), 'click', function () { vPly = vTrap.line.length; renderViewer(); });
-  on($('v-strip'), 'click', function (e) {
-    var m = e.target.closest('.m');
-    if (m) { vPly = +m.dataset.ply; renderViewer(); }
+  on($('libSide'), 'click', function (e) {
+    var b = e.target.closest('[data-side]');
+    if (!b) return;
+    L.side = b.getAttribute('data-side');
+    store.set('libSide', L.side);
+    renderLibrary();
   });
-  on($('v-load'), 'click', function () {
-    path = vTrap.line.slice(0, vTrap.blunder);
+  on($('search'), 'input', function (e) { L.q = e.target.value; renderLibrary(); });
+  on($('libOutcome'), 'change', function (e) { L.outcome = e.target.value; renderLibrary(); });
+  on($('libSort'), 'change', function (e) { L.sort = e.target.value; store.set('libSort', L.sort); renderLibrary(); });
+  on($('libHide'), 'change', function (e) { L.hide = e.target.checked; renderLibrary(); });
+
+  on($('vClose'), 'click', closeTrap);
+  on($('overlay'), 'click', function (e) { if (e.target === $('overlay')) closeTrap(); });
+  on($('vModes'), 'click', function (e) {
+    var b = e.target.closest('[data-mode]');
+    if (b) setMode(b.getAttribute('data-mode'));
+  });
+  on($('vStart'), 'click', function () { stopTimers(); V.ply = 0; renderViewer(); });
+  on($('vPrev'), 'click', function () { stopTimers(); step(-1); });
+  on($('vNext'), 'click', function () { stopTimers(); step(1); });
+  on($('vEnd'), 'click', function () { stopTimers(); V.ply = V.t.line.length; renderViewer(); });
+  on($('vAuto'), 'click', toggleAuto);
+  on($('vStrip'), 'click', function (e) {
+    var m = e.target.closest('[data-ply]');
+    if (m && V.mode === 'study') { stopTimers(); V.ply = +m.getAttribute('data-ply'); renderViewer(); }
+  });
+  on($('qEntry'), 'submit', function (e) {
+    e.preventDefault();
+    var t = V.t, v = $('qIn').value.trim();
+    if (!t || !v || V.ply >= t.line.length) return;
+    var mv = E.sanToMove(t.states[V.ply], v);
+    if (!mv) { V.q.msg = '“' + v + '” is not a legal move here.'; V.q.tone = 'bad'; renderViewer(); return; }
+    quizMove(mv);
+  });
+  on($('qShow'), 'click', quizReveal);
+  on($('qRestart'), 'click', function () { setMode('quiz'); });
+  on($('vLearned'), 'change', function (e) { setLearned(V.t.id, e.target.checked); });
+  on($('vLoad'), 'click', function () {
+    var t = V.t;
+    X.side = t.side; X.flip = false;
+    X.hist = t.line.slice(0, t.blunder);
+    X.moves = t.moves.slice(0, t.blunder);
+    X.states = t.states.slice(0, t.blunder + 1);
+    X.cur = t.blunder;
+    saveExplorer();
     closeTrap();
     showTab('explore');
     renderExplorer();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo(0, 0);
   });
 
   on(document, 'keydown', function (e) {
+    var typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '');
     if (!$('overlay').hidden) {
-      if (e.key === 'Escape') closeTrap();
-      if (e.key === 'ArrowLeft' && vPly > 0) { vPly--; renderViewer(); }
-      if (e.key === 'ArrowRight' && vTrap && vPly < vTrap.line.length) { vPly++; renderViewer(); }
+      if (e.key === 'Escape') { e.preventDefault(); closeTrap(); return; }
+      if (typing || V.mode !== 'study') return;
+      if (e.key === 'ArrowLeft') { stopTimers(); step(-1); e.preventDefault(); }
+      if (e.key === 'ArrowRight') { stopTimers(); step(1); e.preventDefault(); }
+      return;
     }
+    if (typing || $('view-explore').hidden) return;
+    if (e.key === 'ArrowLeft') { xGo(X.cur - 1); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { xGo(X.cur + 1); e.preventDefault(); }
+  });
+  /* keep keyboard focus inside the dialog */
+  on($('overlay'), 'keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    var f = [].filter.call($('overlay').querySelectorAll('button, input, a[href], select'), function (el) {
+      return !el.disabled && el.offsetParent !== null;
+    });
+    if (!f.length) return;
+    if (e.shiftKey && document.activeElement === f[0]) { f[f.length - 1].focus(); e.preventDefault(); }
+    else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { f[0].focus(); e.preventDefault(); }
   });
 
   function showTab(which) {
@@ -1414,21 +2121,19 @@ footer.foot { margin-top: 32px; color: var(--muted); font-size: 12.5px; text-ali
     $('view-library').hidden = which !== 'library';
     $('tab-explore').setAttribute('aria-selected', which === 'explore');
     $('tab-library').setAttribute('aria-selected', which === 'library');
+    store.set('tab', which);
   }
-  on($('tab-explore'), 'click', function () { showTab('explore'); });
+  on($('tab-explore'), 'click', function () { showTab('explore'); renderExplorer(); });
   on($('tab-library'), 'click', function () { showTab('library'); renderLibrary(); });
-  on($('search'), 'input', function (e) { fQuery = e.target.value; renderLibrary(); });
-  on($('seg'), 'click', function (e) {
-    var b = e.target.closest('button');
-    if (!b) return;
-    fSide = b.dataset.side;
-    [].forEach.call($('seg').children, function (c) { c.setAttribute('aria-pressed', c === b); });
-    renderLibrary();
-  });
 
   $('tab-library').textContent = 'Library (' + TRAPS.length + ')';
+  $('libSort').value = L.sort;
+  showTab(store.get('tab', 'explore') === 'library' ? 'library' : 'explore');
   renderExplorer();
   renderLibrary();
+
+  /* test hook: lets the page tests inspect state without scraping */
+  window.__traps = { X: X, V: V, INDEX: INDEX, hitsAt: hitsAt, TRAPS: TRAPS };
 })();
 </script>
 </body>

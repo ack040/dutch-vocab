@@ -4,108 +4,162 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chess Opening Traps</title>
-<meta name="description" content="A library of 50 named chess opening traps. Enter the moves that were played and see which traps are still on the board, who blunders, and how to punish it.">
+<meta name="description" content="Fifty named chess opening traps, checked with Stockfish. Enter the moves of your game and see which of your traps are still on, when the opponent can go wrong, and how to punish it.">
+<meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101317" media="(prefers-color-scheme: dark)">
 <style>/*==CSS==*/</style>
 </head>
 <body>
 <div class="wrap">
 
   <header class="top">
-    <h1>Chess Opening Traps</h1>
-    <span class="sub">Enter the moves as they are played. The list narrows to the traps that are still on.</span>
+    <div class="brand">
+      <h1>Chess Opening Traps</h1>
+      <span class="sub">Fifty traps for both colours, every line checked with Stockfish</span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button id="tab-explore" role="tab" aria-selected="true" aria-controls="view-explore">Explorer</button>
+      <button id="tab-library" role="tab" aria-selected="false" aria-controls="view-library">Library</button>
+    </nav>
   </header>
 
-  <nav class="tabs">
-    <button id="tab-explore" aria-selected="true">Explorer</button>
-    <button id="tab-library" aria-selected="false">Library</button>
-  </nav>
-
-  <section id="view-explore">
-    <div class="cols">
-      <div>
-        <div class="card">
-          <div class="board-wrap">
-            <div class="board" id="board"></div>
-            <div class="turn"><span id="turn-side"></span><span id="turn-ply"></span></div>
+  <section id="view-explore" role="tabpanel" aria-labelledby="tab-explore">
+    <div class="xcols">
+      <div class="xcol">
+        <div class="card xboard">
+          <div class="bar">
+            <span class="lbl">You play</span>
+            <span class="seg" id="sideSeg" role="group" aria-label="Your colour">
+              <button type="button" data-side="w" aria-pressed="true">White</button>
+              <button type="button" data-side="b" aria-pressed="false">Black</button>
+            </span>
+            <button type="button" class="btn ghost icon" id="flip" title="Flip the board" aria-label="Flip the board">&#8645;</button>
           </div>
+          <div id="board"></div>
+          <div class="status"><span id="turn"></span><span id="ply" class="muted"></span></div>
+          <div class="nav">
+            <button type="button" class="btn" id="back" title="Back one move (left arrow)">&#9664; Back</button>
+            <button type="button" class="btn" id="fwd" title="Forward one move (right arrow)">Forward &#9654;</button>
+            <button type="button" class="btn" id="reset">New game</button>
+          </div>
+          <p class="hint" id="undoHint" hidden>Tip: the arrow keys step back and forward. Entering a different move replaces what came after.</p>
         </div>
-        <div class="card">
-          <h2>Moves played</h2>
-          <div class="body"><div class="pgn" id="pgn"></div></div>
+
+        <div class="card xmoves">
+          <h2>Moves</h2>
+          <div class="body">
+            <div class="pgn" id="pgn"></div>
+            <a class="ext" id="xLichess" href="https://lichess.org/analysis" target="_blank" rel="noopener">Analyse this position on Lichess &#8599;</a>
+          </div>
         </div>
       </div>
 
-      <div>
-        <div class="card">
-          <h2>Enter a move</h2>
+      <div class="xcol">
+        <div class="card xinput">
+          <h2 id="inputHdr">Your move</h2>
           <div class="body">
-            <form class="entry" id="entry">
-              <input id="movein" placeholder="e4, Nf3, Bxf7+, O-O, e8=Q" autocomplete="off" autocapitalize="off" spellcheck="false">
+            <form class="entry" id="entry" autocomplete="off">
+              <input id="movein" aria-label="Move" placeholder="e4, Nf3, Bxf7+, O-O" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
               <button class="btn primary" type="submit">Play</button>
             </form>
-            <div class="err" id="err"></div>
-            <div class="hint" id="choices-hdr"></div>
+            <div class="err" id="err" role="alert"></div>
+            <div class="hint" id="choicesHdr"></div>
             <div class="choices" id="choices"></div>
-            <div class="hint">Standard algebraic notation. Long form like <b>e2e4</b> works too. Any legal move is accepted, including moves no trap uses.</div>
-            <div class="entry" style="margin-top:14px">
-              <button class="btn" id="undo" type="button">Undo</button>
-              <button class="btn" id="reset" type="button">Reset</button>
-              <button class="btn" id="flip" type="button">Flip board</button>
-            </div>
+            <details class="help">
+              <summary>How to use it</summary>
+              <ol>
+                <li>Pick your colour. Only traps <b>you</b> can spring are shown; nothing warns you about your own mistakes.</li>
+                <li>Enter every move as it is played: tap a piece and then its square, type it, or tap a suggested move.</li>
+                <li>Blue arrow: your book move. Red arrow: the losing move the opponent might play. Green arrow: the move that punishes it.</li>
+                <li>Traps are matched by position, so a different move order that reaches the same position still counts.</li>
+              </ol>
+            </details>
           </div>
         </div>
 
-        <div id="alerts"></div>
+        <div id="alerts" class="xalerts" aria-live="polite"></div>
 
-        <div class="card">
-          <h2 id="matchhdr">Traps</h2>
+        <div class="card xtraps">
+          <h2 id="matchHdr">Traps</h2>
           <div class="body"><div class="tlist" id="matches"></div></div>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="view-library" hidden>
+  <section id="view-library" role="tabpanel" aria-labelledby="tab-library" hidden>
     <div class="filters">
-      <input type="search" id="search" placeholder="Search name, opening, ECO code or a move">
-      <span class="seg" id="seg">
-        <button data-side="all" aria-pressed="true">All</button>
-        <button data-side="w" aria-pressed="false">White traps</button>
-        <button data-side="b" aria-pressed="false">Black traps</button>
+      <input type="search" id="search" placeholder="Search a name, opening, ECO code or move" aria-label="Search traps">
+      <span class="seg" id="libSide" role="group" aria-label="Side">
+        <button type="button" data-side="all" aria-pressed="true">All</button>
+        <button type="button" data-side="w" aria-pressed="false">White</button>
+        <button type="button" data-side="b" aria-pressed="false">Black</button>
       </span>
-      <span class="hint" id="libcount" style="margin:0"></span>
+      <select id="libOutcome" aria-label="Outcome">
+        <option value="all">Any outcome</option>
+        <option value="mate">Checkmate</option>
+        <option value="material">Wins material</option>
+        <option value="attack">Advantage</option>
+              </select>
+      <select id="libSort" aria-label="Sort">
+        <option value="eco">Sort by opening</option>
+        <option value="name">Sort by name</option>
+        <option value="short">Shortest first</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="libHide"> Hide learned</label>
     </div>
+    <div class="progress-row"><span class="hint" id="libcount"></span><span class="bar-track"><span class="bar-fill" id="progress"></span></span></div>
     <div class="grid" id="grid"></div>
   </section>
 
   <footer class="foot">
-    Every line in this library was replayed and checked move by move: all moves are legal, every checkmate is a real checkmate, and the material counts are taken from the final position.
+    Every line is replayed move by move for legality, and every trap was checked with Stockfish at depth 20.
+    Your colour, the game you are entering and the traps you have learned are kept in this browser only.
   </footer>
 </div>
 
 <div class="overlay" id="overlay" hidden>
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="v-name">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="vName">
     <header>
       <div class="t">
-        <h2 id="v-name"></h2>
-        <div class="meta" id="v-meta"></div>
+        <h2 id="vName"></h2>
+        <div class="meta" id="vMeta"></div>
       </div>
-      <button class="x" id="v-close" title="Close" aria-label="Close">&times;</button>
+      <span class="seg" id="vModes" role="group" aria-label="Mode">
+        <button type="button" data-mode="study" aria-pressed="true">Study</button>
+        <button type="button" data-mode="quiz" aria-pressed="false">Quiz me</button>
+      </span>
+      <button type="button" class="x" id="vClose" title="Close (Esc)" aria-label="Close">&times;</button>
     </header>
     <div class="cols2">
       <div class="left">
-        <div class="board" id="v-board"></div>
-        <div class="ctrls">
-          <button class="btn" id="v-start" type="button" title="Start">&#8676;</button>
-          <button class="btn" id="v-prev" type="button" title="Previous move">&#8592;</button>
-          <button class="btn" id="v-next" type="button" title="Next move">&#8594;</button>
-          <button class="btn" id="v-end" type="button" title="End">&#8677;</button>
+        <div id="vBoard"></div>
+        <div class="ctrls" id="vStudyCtrls">
+          <button type="button" class="btn" id="vStart" title="Start" aria-label="Start">&#8676;</button>
+          <button type="button" class="btn" id="vPrev" title="Previous move" aria-label="Previous move">&#8592;</button>
+          <button type="button" class="btn" id="vAuto" title="Play through" aria-label="Play through">&#9654;</button>
+          <button type="button" class="btn" id="vNext" title="Next move" aria-label="Next move">&#8594;</button>
+          <button type="button" class="btn" id="vEnd" title="End" aria-label="End">&#8677;</button>
         </div>
-        <div class="movestrip" id="v-strip"></div>
+        <div id="vQuizCtrls" hidden>
+          <form class="entry" id="qEntry" autocomplete="off">
+            <input id="qIn" aria-label="Your move" placeholder="Tap the board or type" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
+            <button class="btn primary" type="submit">Play</button>
+          </form>
+          <div class="row">
+            <button type="button" class="btn" id="qShow">Show the move</button>
+            <button type="button" class="btn" id="qRestart">Restart</button>
+          </div>
+        </div>
+        <div class="movestrip" id="vStrip"></div>
       </div>
       <div class="right">
-        <div id="v-notes"></div>
-        <button class="btn primary" id="v-load" type="button" style="margin-top:16px">Load this line into the Explorer</button>
+        <div id="vNotes"></div>
+        <div class="actions">
+          <button type="button" class="btn primary" id="vLoad">Load into the Explorer</button>
+          <label class="chk"><input type="checkbox" id="vLearned"> Learned</label>
+          <a class="ext" id="vLichess" href="https://lichess.org/analysis" target="_blank" rel="noopener">Analyse on Lichess &#8599;</a>
+        </div>
       </div>
     </div>
   </div>
